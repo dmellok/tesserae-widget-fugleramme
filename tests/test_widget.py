@@ -130,7 +130,7 @@ SMALL = {"species_limit": "6", "lookback_hours": "24"}
 def test_manifest_is_valid():
     manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
     assert manifest["name"] == "Fugleramme"
-    assert manifest["version"] == "0.1.0"
+    assert manifest["version"] == "0.1.1"
     assert manifest["tesserae_compat"] == "1.x"
     assert len(manifest["description"]) <= 280
     assert manifest["requires"] == ["network:*"]
@@ -240,7 +240,9 @@ def test_arrival_is_the_demo_newcomer(tmp_path, offline):
 
 
 def test_job_key_follows_the_inputs(tmp_path, offline):
-    key = lambda options: server.fetch(options, {}, ctx=_ctx(tmp_path))["job"]
+    def key(options):
+        return server.fetch(options, {}, ctx=_ctx(tmp_path))["job"]
+
     first = key(SMALL)
     assert key(SMALL) == first  # the same page is the same job
     assert key({**SMALL, "paper": "textured"}) != first

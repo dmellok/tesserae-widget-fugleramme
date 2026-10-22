@@ -1,6 +1,7 @@
 # Vendored from Fugleramme v0.29.0 (https://github.com/arnegiacomo/fugleramme).
 # Copyright (c) 2026 Arne Giacomo Munthe-Kaas. MIT License, see LICENSE.
-# Tesserae: unchanged.
+# Tesserae: text is antialiased on the flat page too (flat_mode), since Tesserae
+# quantises the composed page for each panel itself.
 """Page furniture shared by every display mode.
 
 Getting an asset and a piece of text onto paper is the same job whether the page
@@ -222,8 +223,14 @@ def flat_mode(flat: bool) -> str:
     output: stems come out a whole number of pixels wide and baselines and
     x-heights land on pixel rows, which no threshold of antialiased text can do:
     its stems wander between one and two pixels and hairlines break into dots
-    (discussion #76). Converted back to "L" it is a 0/255 mask like any other."""
-    return "1" if flat else "L"
+    (discussion #76). Converted back to "L" it is a 0/255 mask like any other.
+
+    Tesserae: always "L". The page is not dithered here: Tesserae composes it
+    and quantises it for each panel, the way it does every widget's antialiased
+    text, and one-bit glyphs read as jagged and muddy on a screen and once
+    scaled. The flat page keeps its even paper and its pure black ink."""
+    del flat
+    return "L"
 
 
 def stamp(canvas: Image.Image, mask: Image.Image, at: tuple[int, int], textured: bool) -> None:

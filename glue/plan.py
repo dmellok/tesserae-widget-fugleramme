@@ -53,7 +53,7 @@ log = logging.getLogger(__name__)
 
 # Bumped when the widget draws a page differently for the same inputs, so a
 # cached PNG from before is not served.
-RENDER_VERSION = 1
+RENDER_VERSION = 2
 
 COMMON = "common"  # the detector's own species language (Fugleramme's STATION)
 ENGLISH = "en"  # BirdNET v2.4's own English label, bundled

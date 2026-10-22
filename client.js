@@ -50,8 +50,11 @@ export default async function render(shadow, ctx) {
   const strip = d.strip || Math.max(12, Math.min(22, Math.round(Math.min(w, h) * 0.026)));
   const url = new URL('./page.png', import.meta.url);
   url.searchParams.set('job', d.job);
-  url.searchParams.set('w', String(w));
-  url.searchParams.set('h', String(Math.max(16, h - strip)));
+  /* Drawn at the screen's own pixels, so a dense display gets a sharp page rather than a
+     stretched one; a panel renders at one pixel per pixel and gets exactly its size. */
+  const dpr = Math.max(1, Math.min(2, Number(globalThis.devicePixelRatio) || 1));
+  url.searchParams.set('w', String(Math.round(w * dpr)));
+  url.searchParams.set('h', String(Math.round(Math.max(16, h - strip) * dpr)));
   shadow.innerHTML = wrap(d.paper, `<img class="pg" alt="" src="${esc(url.href)}">${credit(d, strip)}`);
   /* A narrow cell keeps the licence in view: the artists give way first. */
   const line = shadow.querySelector('.cr span');
