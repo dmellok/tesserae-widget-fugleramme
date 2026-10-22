@@ -1,0 +1,465 @@
+{
+  "tesserae_compat": "1.x",
+  "name": "Fugleramme",
+  "version": "0.1.0",
+  "kind": "widget",
+  "description": "The birds a BirdNET-Go or BirdWeather station heard, drawn by Fugleramme's own renderer as hand-coloured 1800s plates packed onto one page: the window's collage, the latest bird or the newest arrival. Plates are fetched from Fugleramme on first use. Demo garden until set up.",
+  "icon": "ph-bird",
+  "supports": {
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ]
+  },
+  "requires": [
+    "network:*"
+  ],
+  "render": {
+    "needs_network": true,
+    "full_bleed": true
+  },
+  "design": {
+    "palette": "extended"
+  },
+  "cell_options": [
+    {
+      "name": "source",
+      "type": "select",
+      "label": "Detector",
+      "default": "birdnet_go",
+      "help": "Where the birds come from. Leave the address or the station empty for a demo garden, so every page can be tried first.",
+      "choices": [
+        {
+          "value": "birdnet_go",
+          "label": "BirdNET-Go"
+        },
+        {
+          "value": "birdweather",
+          "label": "BirdWeather station"
+        }
+      ]
+    },
+    {
+      "name": "address",
+      "type": "string",
+      "label": "BirdNET-Go address",
+      "default": "",
+      "mask": false,
+      "help": "Where BirdNET-Go's web page opens, for example http://birdnet.local:8080. Leave empty for a demo garden.",
+      "show_if": {
+        "source": "birdnet_go"
+      }
+    },
+    {
+      "name": "password",
+      "type": "string",
+      "label": "BirdNET-Go password (normally blank)",
+      "default": "",
+      "secret": true,
+      "help": "Only when BirdNET-Go's Private Mode keeps the detections behind a login.",
+      "show_if": {
+        "source": "birdnet_go",
+        "address": {
+          "not": ""
+        }
+      }
+    },
+    {
+      "name": "station",
+      "type": "string",
+      "label": "BirdWeather station",
+      "default": "",
+      "mask": false,
+      "help": "A public station's number, or its page such as https://app.birdweather.com/stations/123. Up to five, separated by commas, are read as one. Leave empty for a demo garden.",
+      "show_if": {
+        "source": "birdweather"
+      }
+    },
+    {
+      "name": "mode",
+      "type": "select",
+      "label": "Page",
+      "default": "collage",
+      "help": "The collage packs every bird the window heard onto the page, each sized by its real body mass. The other two draw one plate, large, with its name under it.",
+      "choices": [
+        {
+          "value": "collage",
+          "label": "Collage: the birds heard in the window"
+        },
+        {
+          "value": "latest",
+          "label": "Latest bird: the one calling now, with the time"
+        },
+        {
+          "value": "arrival",
+          "label": "Newest arrival: the latest first-ever species, with the date"
+        }
+      ]
+    },
+    {
+      "name": "lookback_hours",
+      "type": "select",
+      "label": "Window",
+      "default": "24",
+      "show_if": {
+        "mode": "collage"
+      },
+      "choices": [
+        {
+          "value": "0.25",
+          "label": "Last 15 minutes"
+        },
+        {
+          "value": "0.5",
+          "label": "Last 30 minutes"
+        },
+        {
+          "value": "1",
+          "label": "Last hour"
+        },
+        {
+          "value": "3",
+          "label": "Last 3 hours"
+        },
+        {
+          "value": "6",
+          "label": "Last 6 hours"
+        },
+        {
+          "value": "12",
+          "label": "Last 12 hours"
+        },
+        {
+          "value": "24",
+          "label": "Today (24 hours)"
+        },
+        {
+          "value": "72",
+          "label": "Last 3 days"
+        },
+        {
+          "value": "168",
+          "label": "Last week"
+        },
+        {
+          "value": "720",
+          "label": "Last 30 days"
+        },
+        {
+          "value": "0",
+          "label": "All time"
+        }
+      ]
+    },
+    {
+      "name": "layout",
+      "type": "select",
+      "label": "Layout",
+      "default": "spiral",
+      "show_if": {
+        "mode": "collage"
+      },
+      "help": "Spiral grows out from the middle, so the page reads as a round cluster with bare corners. Voids puts each bird on the emptiest paper it fits, filling the corners too.",
+      "choices": [
+        {
+          "value": "spiral",
+          "label": "Spiral: grows out from the middle"
+        },
+        {
+          "value": "voids",
+          "label": "Voids: fills the emptiest spot first"
+        }
+      ]
+    },
+    {
+      "name": "spotlight",
+      "type": "boolean",
+      "label": "Spotlight the latest bird",
+      "default": false,
+      "show_if": {
+        "mode": "collage"
+      },
+      "help": "Draws the bird heard last large in the middle, with the rest packed round it."
+    },
+    {
+      "name": "species_limit",
+      "type": "select",
+      "label": "How many birds",
+      "default": "40",
+      "show_if": {
+        "mode": "collage"
+      },
+      "help": "The most species on the page. With the numbered key on, at most 40.",
+      "choices": [
+        {
+          "value": "0",
+          "label": "Every bird in the window"
+        },
+        {
+          "value": "10",
+          "label": "10"
+        },
+        {
+          "value": "20",
+          "label": "20"
+        },
+        {
+          "value": "30",
+          "label": "30"
+        },
+        {
+          "value": "40",
+          "label": "40"
+        },
+        {
+          "value": "60",
+          "label": "60"
+        },
+        {
+          "value": "80",
+          "label": "80"
+        },
+        {
+          "value": "100",
+          "label": "100"
+        }
+      ]
+    },
+    {
+      "name": "ranking",
+      "type": "select",
+      "label": "Which birds, when there are more",
+      "default": "heard",
+      "show_if": {
+        "mode": "collage",
+        "species_limit": {
+          "not": "0"
+        }
+      },
+      "choices": [
+        {
+          "value": "heard",
+          "label": "The most heard"
+        },
+        {
+          "value": "rarest",
+          "label": "The rarest in the window"
+        },
+        {
+          "value": "rarest_ever",
+          "label": "The rarest all time"
+        },
+        {
+          "value": "last_heard",
+          "label": "The latest heard"
+        }
+      ]
+    },
+    {
+      "name": "show_names",
+      "type": "boolean",
+      "label": "Names",
+      "default": true
+    },
+    {
+      "name": "name_key",
+      "type": "boolean",
+      "label": "Numbered key",
+      "default": false,
+      "show_if": {
+        "mode": "collage",
+        "show_names": true
+      },
+      "help": "A number on each bird and the names listed in a key, below a portrait page or beside a landscape one."
+    },
+    {
+      "name": "names",
+      "type": "select",
+      "label": "Names in",
+      "default": "sci",
+      "show_if": {
+        "show_names": true
+      },
+      "help": "Common names are the ones the detector sends: BirdNET-Go's in whatever language it is set to, BirdWeather's in English. A bird it has no name for falls back to BirdNET's English label.",
+      "choices": [
+        {
+          "value": "sci",
+          "label": "Scientific"
+        },
+        {
+          "value": "common",
+          "label": "Common names from the detector"
+        },
+        {
+          "value": "en",
+          "label": "English (BirdNET labels)"
+        }
+      ]
+    },
+    {
+      "name": "second",
+      "type": "select",
+      "label": "Second line",
+      "default": "",
+      "show_if": {
+        "show_names": true
+      },
+      "help": "A second name under the first, in parentheses.",
+      "choices": [
+        {
+          "value": "",
+          "label": "None"
+        },
+        {
+          "value": "sci",
+          "label": "Scientific"
+        },
+        {
+          "value": "common",
+          "label": "Common names from the detector"
+        },
+        {
+          "value": "en",
+          "label": "English (BirdNET labels)"
+        }
+      ]
+    },
+    {
+      "name": "font",
+      "type": "select",
+      "label": "Typeface",
+      "default": "gentium",
+      "show_if": {
+        "show_names": true
+      },
+      "help": "Seven italics, fetched from Fugleramme the first time they are used. Cormorant Garamond suits the single-plate pages; its hairlines break up on a crowded collage.",
+      "choices": [
+        {
+          "value": "gentium",
+          "label": "Gentium Book Plus"
+        },
+        {
+          "value": "garamond",
+          "label": "EB Garamond"
+        },
+        {
+          "value": "cormorant",
+          "label": "Cormorant Garamond"
+        },
+        {
+          "value": "baskerville",
+          "label": "Libre Baskerville"
+        },
+        {
+          "value": "playfair",
+          "label": "Playfair Display"
+        },
+        {
+          "value": "alegreya",
+          "label": "Alegreya"
+        },
+        {
+          "value": "bitter",
+          "label": "Bitter"
+        }
+      ]
+    },
+    {
+      "name": "label_size",
+      "type": "select",
+      "label": "Name size",
+      "default": "medium",
+      "show_if": {
+        "show_names": true
+      },
+      "choices": [
+        {
+          "value": "small",
+          "label": "Small"
+        },
+        {
+          "value": "medium",
+          "label": "Medium"
+        },
+        {
+          "value": "large",
+          "label": "Large"
+        },
+        {
+          "value": "xlarge",
+          "label": "Extra large"
+        }
+      ]
+    },
+    {
+      "name": "margin",
+      "type": "select",
+      "label": "Margin",
+      "default": "4",
+      "help": "Bare paper along each edge, as a share of the page's short side, for a mat that covers the panel's border. The single-plate pages keep at least 8%.",
+      "choices": [
+        {
+          "value": "0",
+          "label": "0%"
+        },
+        {
+          "value": "2",
+          "label": "2%"
+        },
+        {
+          "value": "4",
+          "label": "4%"
+        },
+        {
+          "value": "6",
+          "label": "6%"
+        },
+        {
+          "value": "8",
+          "label": "8%"
+        },
+        {
+          "value": "10",
+          "label": "10%"
+        },
+        {
+          "value": "15",
+          "label": "15%"
+        },
+        {
+          "value": "20",
+          "label": "20%"
+        },
+        {
+          "value": "25",
+          "label": "25%"
+        }
+      ]
+    },
+    {
+      "name": "paper",
+      "type": "select",
+      "label": "Paper",
+      "default": "flat",
+      "help": "Flat is the page Fugleramme draws for its e-ink panel: an even paper tone and solid black names, which the panel's colours reproduce cleanly. Textured is its screen page, with paper grain that a colour e-ink panel turns into speckle.",
+      "choices": [
+        {
+          "value": "flat",
+          "label": "Flat, for e-ink panels"
+        },
+        {
+          "value": "textured",
+          "label": "Textured, for screens"
+        }
+      ]
+    },
+    {
+      "name": "credit",
+      "type": "boolean",
+      "label": "Credit line under the page",
+      "default": true,
+      "help": "Names the artists of the plates on the page, and Fugleramme, whose cut-outs they are (CC BY-SA 4.0)."
+    }
+  ]
+}

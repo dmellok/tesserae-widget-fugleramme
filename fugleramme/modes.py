@@ -1,0 +1,354 @@
+# Vendored from Fugleramme v0.29.0 (https://github.com/arnegiacomo/fugleramme).
+# Copyright (c) 2026 Arne Giacomo Munthe-Kaas. MIT License, see LICENSE.
+# Tesserae: context() and png_bytes() are left out; glue.plan builds the Context.
+"""What the frame is showing.
+
+A mode is one page in two halves: how it is drawn, and what it is a function of.
+Both outputs go through the same pair, so the panel and the kiosk can never
+disagree, and the render loop re-renders only when a mode's own key moves - the
+species set for the collage, the run the latest bird is on rather than its last
+call. The key is what makes a slow e-ink page bearable: a busy feeder must not
+spend the day refreshing.
+
+Only the collage reads the lookback window; the rest look at the whole record,
+which is why the admin greys the setting out for them.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from functools import cache
+from pathlib import Path
+
+from PIL import Image
+
+from .languages import STATION, Drawable, Namer, english_name, station_locale
+from .names import drawable_keys, image_for, normalize, perches_for
+from .render import fonts
+from .render.collage import KEY_LIMIT, NO_LIMIT, gather_entries, render_collage, selected_species
+from .render.page import NEW, Edges
+from .render.plate import effective_margin, render_plate
+from .source import Source, Species
+
+log = logging.getLogger(__name__)
+
+# How far back to look for a detection we have artwork for, and for the start of
+# the run the holder is on. A species with no plate cannot hold the page, so the
+# latest one that can does instead.
+_RECENT_SCAN = 500
+NEW_HOURS = 24  # how long a bird first heard counts as new, for its mark
+
+
+@dataclass(frozen=True)
+class Context:
+    """Everything a mode draws from. Tesserae: built from a cell's options by
+    glue.plan, where Fugleramme builds it from its settings file."""
+
+    mode: str
+    source: Source
+    images_dir: Path
+    style: str
+    day: int  # which variant each bird wears (`image_for`)
+    namer: Namer
+    resolution: tuple[int, int]
+    show_names: bool
+    name_key: bool  # only while names are on
+    lookback_hours: float
+    font_key: str
+    label_size: str
+    species_limit: int
+    ranking: str
+    layout: str
+    spotlight: bool
+    margin: Edges  # of the short side; the settings are percents
+    textured: bool = True
+
+    def perches(self):
+        return perches_for(self.images_dir, self.style)
+
+    def drawable(self):
+        """Species keys this style can draw. One listing, not a glob per name:
+        the plate modes ask it of the whole life list on every poll."""
+        return drawable_keys(self.images_dir, self.style)
+
+
+def _key_limit(limit: int) -> int:
+    return KEY_LIMIT if limit == NO_LIMIT else min(limit, KEY_LIMIT)
+
+
+@dataclass(frozen=True)
+class Mode:
+    label: str
+    render: Callable[[Context], Image.Image]
+    key: Callable[[Context], tuple]
+    # The species this page is about, for the admin listing.
+    subjects: Callable[[Context], list[str]]
+    # Driven by the lookback window: the admin offers the setting.
+    windowed: bool = False
+
+
+def _newcomers(ctx: Context) -> frozenset[str]:
+    """Species first heard in the last `NEW_HOURS`, while names are on to mark."""
+    if not ctx.show_names:
+        return frozenset()
+    since = datetime.now(UTC) - timedelta(hours=NEW_HOURS)
+    return frozenset(s.scientific_name for s in ctx.source.life_list() if s.first_seen >= since)
+
+
+def _drawable(ctx: Context) -> Drawable:
+    """Whether a name or date has a face here. Asked where the label is written,
+    so the collage's cache key carries the fallback."""
+
+    def drawable(code: str, text: str) -> bool:
+        if fonts.settable(text, ctx.font_key):
+            return True
+        locale = station_locale() if code == STATION else code
+        _cannot_draw(english_name(locale) or locale or code)
+        return False
+
+    return drawable
+
+
+@cache
+def _cannot_draw(language: str) -> None:
+    """Said once per language: it falls back on every render."""
+    log.warning("%s can't be drawn here; showing scientific names and numeric dates", language)
+
+
+def _labeller(ctx: Context) -> Callable[[str], str]:
+    """Scientific name -> label, a newcomer's first line ending in its mark."""
+    new = _newcomers(ctx)
+    drawable = _drawable(ctx)
+
+    def label(name: str) -> str:
+        text = ctx.namer.label(name, drawable)
+        if name not in new:
+            return text
+        first, *rest = text.split("\n")
+        return "\n".join([first + NEW, *rest])
+
+    return label
+
+
+def _plate(ctx: Context, name: str | None, note: str = "", art: Path | None = None) -> Image.Image:
+    if name and art is None:
+        art = image_for(name, ctx.images_dir, ctx.style, ctx.day)
+    return render_plate(
+        art,
+        _labeller(ctx)(name) if name else "",
+        note,
+        ctx.resolution,
+        ctx.show_names,
+        ctx.textured,
+        ctx.font_key,
+        ctx.label_size,
+        ctx.perches(),
+        margin=ctx.margin,
+    )
+
+
+def _spotlit(ctx: Context) -> str | None:
+    """The bird in the collage's middle: the species of the latest call, as
+    the Latest bird page has it."""
+    if not ctx.spotlight:
+        return None
+    holder = _holder(ctx)
+    return holder[0] if holder else None
+
+
+def _selected(ctx: Context, keys: set[str] | None = None) -> list[str]:
+    """The species on the collage, in name order. This runs on every poll, so a
+    caller that already listed the style hands `keys` over."""
+    return selected_species(
+        ctx.source,
+        ctx.images_dir,
+        ctx.style,
+        ctx.lookback_hours,
+        ctx.species_limit,
+        ctx.ranking,
+        keys,
+        _spotlit(ctx),
+    )
+
+
+def _collage_key(ctx: Context) -> tuple:
+    # The page's species, not the window's: under a limit two birds can trade
+    # places across it while the set of species heard sits still.
+    species = tuple(_selected(ctx))
+    spotlit = _spotlit(ctx)
+    return (species, spotlit if spotlit in species else None)
+
+
+def _collage(ctx: Context) -> Image.Image:
+    spotlit = _spotlit(ctx)
+    return render_collage(
+        gather_entries(
+            ctx.source,
+            ctx.images_dir,
+            ctx.style,
+            ctx.day,
+            ctx.lookback_hours,
+            ctx.species_limit,
+            ctx.ranking,
+            spotlit,
+        ),
+        ctx.resolution,
+        ctx.show_names,
+        ctx.textured,
+        ctx.font_key,
+        ctx.label_size,
+        _labeller(ctx),
+        ctx.perches(),
+        ctx.layout,
+        ctx.margin,
+        ctx.name_key,
+        spotlit,
+    )
+
+
+def _holder(ctx: Context) -> tuple[str, datetime] | None:
+    """The species holding the page, and when it took it - the oldest detection
+    of its unbroken run. A species with no artwork cannot hold the page, so it
+    does not break someone else's run either."""
+    keys = ctx.drawable()
+    name: str | None = None
+    since: datetime | None = None
+    for detection in ctx.source.recent(_RECENT_SCAN):  # newest first
+        if normalize(detection.scientific_name) not in keys:
+            continue
+        if name is None:
+            name = detection.scientific_name
+        elif detection.scientific_name != name:
+            break
+        since = detection.detected_at
+    return (name, since) if name and since else None
+
+
+def _latest_key(ctx: Context) -> tuple:
+    # When the run began, not when the bird last called: the caption shows a
+    # clock time, so a key that moved on every call would re-push the panel all
+    # day, and one that ignored the time would let the two outputs disagree.
+    return _holder(ctx) or ()
+
+
+def _latest_page(ctx: Context) -> Image.Image:
+    holder = _holder(ctx)
+    if holder is None:
+        return _plate(ctx, None)
+    name, since = holder
+    return _plate(ctx, name, ctx.namer.moment(since, _drawable(ctx)))
+
+
+def _arrival(ctx: Context) -> Species | None:
+    """The most recent first-ever species, which may be weeks old - that it has
+    been a while is itself worth reading."""
+    keys = ctx.drawable()
+    return next(
+        (s for s in reversed(ctx.source.life_list()) if normalize(s.scientific_name) in keys), None
+    )
+
+
+def _arrival_key(ctx: Context) -> tuple:
+    species = _arrival(ctx)
+    if species is None:
+        return ()
+    return (species.scientific_name, species.first_seen.astimezone().date())
+
+
+def _arrival_page(ctx: Context) -> Image.Image:
+    species = _arrival(ctx)
+    if species is None:
+        return _plate(ctx, None)
+    # The year stands in for "first heard": only names get translated, and this
+    # one can be months old.
+    return _plate(ctx, species.scientific_name, ctx.namer.date(species.first_seen, _drawable(ctx)))
+
+
+def _one(species) -> list[str]:
+    return [species.scientific_name] if species else []
+
+
+def artless(ctx: Context, keys: set[str] | None = None) -> list[str]:
+    """Species the window counted that this style cannot draw, in name order.
+    The admin marks these as counted but not drawn; the loop logs them."""
+    keys = ctx.drawable() if keys is None else keys
+    counted = ctx.source.species_since(ctx.lookback_hours)
+    return sorted(name for name, _ in counted if normalize(name) not in keys)
+
+
+def _collage_subjects(ctx: Context) -> list[str]:
+    """What is on the page, plus the window's artless species. Ones the limit
+    left out are not listed: that is a shorter page, not a missing plate."""
+    keys = ctx.drawable()
+    return sorted(_selected(ctx, keys) + artless(ctx, keys))
+
+
+# Insertion order is the order button A walks.
+MODES: dict[str, Mode] = {
+    "collage": Mode("Collage (default)", _collage, _collage_key, _collage_subjects, windowed=True),
+    "latest": Mode(
+        "Latest bird",
+        _latest_page,
+        _latest_key,
+        lambda ctx: [h[0]] if (h := _holder(ctx)) else [],
+    ),
+    "arrival": Mode("Newest arrival", _arrival_page, _arrival_key, lambda ctx: _one(_arrival(ctx))),
+}
+
+DEFAULT_MODE = "collage"
+
+
+def mode_of(key: str) -> Mode:
+    return MODES.get(key, MODES[DEFAULT_MODE])
+
+
+def state_key(ctx: Context) -> tuple:
+    """Everything the page is a function of: the render cache key, and what the
+    kiosk polls to know the picture changed."""
+    mode = mode_of(ctx.mode)
+    return (
+        ctx.mode,
+        ctx.style,
+        ctx.resolution,
+        ctx.show_names,
+        ctx.font_key,
+        ctx.label_size,
+        ctx.layout if mode.windowed else None,
+        ctx.name_key if mode.windowed else None,
+        # The plate clamps to its own margin, so a nudge under it must not repaint.
+        ctx.margin if mode.windowed else effective_margin(ctx.margin),
+        ctx.namer.key,
+        # Each bird's plate is picked again overnight, so the page redraws then.
+        ctx.day,
+        _marked(ctx),
+        mode.key(ctx),
+    )
+
+
+def _marked(ctx: Context) -> tuple[str, ...]:
+    """The page's newcomers: a mark dropping off after a day repaints it. The
+    collage's subjects include its artless species, which are never drawn."""
+    new = _newcomers(ctx)
+    if not new:
+        return ()
+    keys = ctx.drawable()
+    return tuple(sorted(n for n in subjects(ctx) if n in new and normalize(n) in keys))
+
+
+def token(key: tuple) -> str:
+    """Short digest of a state key. blake2b, not hash(): hash() is salted per
+    process and would fire a spurious swap on every restart."""
+    return hashlib.blake2b(repr(key).encode(), digest_size=8).hexdigest()
+
+
+def render(ctx: Context) -> Image.Image:
+    return mode_of(ctx.mode).render(ctx)
+
+
+def subjects(ctx: Context) -> list[str]:
+    """The species the current page is about."""
+    return mode_of(ctx.mode).subjects(ctx)

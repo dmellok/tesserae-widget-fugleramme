@@ -1,0 +1,10 @@
+# Fugleramme's own settings, so the vendored files keep their shape.
+line-length = 100
+target-version = "py311"
+
+[lint]
+extend-select = ["I", "UP", "B", "C4"]
+ignore = ["BLE001", "DTZ011"]
+
+[lint.isort]
+combine-as-imports = true
