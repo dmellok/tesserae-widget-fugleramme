@@ -281,7 +281,7 @@
       "show_if": {
         "show_names": true
       },
-      "help": "Common names are the ones the detector sends: BirdNET-Go's in whatever language it is set to, BirdWeather's in English. A bird it has no name for falls back to BirdNET's English label.",
+      "help": "As Fugleramme names them: from your BirdNET-Go's dictionary for the language, its own species language, or BirdWeather's names, with BirdNET's label list in the language filling in a bird the detector has no name for (and naming the demo garden). Chinese, Japanese, Korean, Thai, Arabic, Hebrew and Malayalam are set in a Noto face, fetched on first use; a name no face here can set shows as its scientific name. Dates on the single-plate pages follow this language.",
       "choices": [
         {
           "value": "sci",
@@ -289,11 +289,155 @@
         },
         {
           "value": "common",
-          "label": "Common names from the detector"
+          "label": "The detector's own language"
         },
         {
           "value": "en",
-          "label": "English (BirdNET labels)"
+          "label": "English"
+        },
+        {
+          "value": "nb",
+          "label": "Norwegian"
+        },
+        {
+          "value": "af",
+          "label": "Afrikaans"
+        },
+        {
+          "value": "ar",
+          "label": "Arabic"
+        },
+        {
+          "value": "bg",
+          "label": "Bulgarian"
+        },
+        {
+          "value": "ca",
+          "label": "Catalan"
+        },
+        {
+          "value": "zh",
+          "label": "Chinese"
+        },
+        {
+          "value": "hr",
+          "label": "Croatian"
+        },
+        {
+          "value": "cs",
+          "label": "Czech"
+        },
+        {
+          "value": "da",
+          "label": "Danish"
+        },
+        {
+          "value": "nl",
+          "label": "Dutch"
+        },
+        {
+          "value": "fi",
+          "label": "Finnish"
+        },
+        {
+          "value": "fr",
+          "label": "French"
+        },
+        {
+          "value": "de",
+          "label": "German"
+        },
+        {
+          "value": "el",
+          "label": "Greek"
+        },
+        {
+          "value": "he",
+          "label": "Hebrew"
+        },
+        {
+          "value": "hu",
+          "label": "Hungarian"
+        },
+        {
+          "value": "is",
+          "label": "Icelandic"
+        },
+        {
+          "value": "id",
+          "label": "Indonesian"
+        },
+        {
+          "value": "it",
+          "label": "Italian"
+        },
+        {
+          "value": "ja",
+          "label": "Japanese"
+        },
+        {
+          "value": "ko",
+          "label": "Korean"
+        },
+        {
+          "value": "lt",
+          "label": "Lithuanian"
+        },
+        {
+          "value": "ml",
+          "label": "Malayalam"
+        },
+        {
+          "value": "pl",
+          "label": "Polish"
+        },
+        {
+          "value": "pt-br",
+          "label": "Portuguese (Brazil)"
+        },
+        {
+          "value": "pt-pt",
+          "label": "Portuguese (Portugal)"
+        },
+        {
+          "value": "ro",
+          "label": "Romanian"
+        },
+        {
+          "value": "ru",
+          "label": "Russian"
+        },
+        {
+          "value": "sr",
+          "label": "Serbian"
+        },
+        {
+          "value": "sk",
+          "label": "Slovak"
+        },
+        {
+          "value": "sl",
+          "label": "Slovenian"
+        },
+        {
+          "value": "es",
+          "label": "Spanish"
+        },
+        {
+          "value": "sv",
+          "label": "Swedish"
+        },
+        {
+          "value": "th",
+          "label": "Thai"
+        },
+        {
+          "value": "tr",
+          "label": "Turkish"
+        },
+        {
+          "value": "uk",
+          "label": "Ukrainian"
         }
       ]
     },
@@ -305,7 +449,7 @@
       "show_if": {
         "show_names": true
       },
-      "help": "A second name under the first, in parentheses.",
+      "help": "A second name under the first, in parentheses, in another language.",
       "choices": [
         {
           "value": "",
@@ -317,11 +461,155 @@
         },
         {
           "value": "common",
-          "label": "Common names from the detector"
+          "label": "The detector's own language"
         },
         {
           "value": "en",
-          "label": "English (BirdNET labels)"
+          "label": "English"
+        },
+        {
+          "value": "nb",
+          "label": "Norwegian"
+        },
+        {
+          "value": "af",
+          "label": "Afrikaans"
+        },
+        {
+          "value": "ar",
+          "label": "Arabic"
+        },
+        {
+          "value": "bg",
+          "label": "Bulgarian"
+        },
+        {
+          "value": "ca",
+          "label": "Catalan"
+        },
+        {
+          "value": "zh",
+          "label": "Chinese"
+        },
+        {
+          "value": "hr",
+          "label": "Croatian"
+        },
+        {
+          "value": "cs",
+          "label": "Czech"
+        },
+        {
+          "value": "da",
+          "label": "Danish"
+        },
+        {
+          "value": "nl",
+          "label": "Dutch"
+        },
+        {
+          "value": "fi",
+          "label": "Finnish"
+        },
+        {
+          "value": "fr",
+          "label": "French"
+        },
+        {
+          "value": "de",
+          "label": "German"
+        },
+        {
+          "value": "el",
+          "label": "Greek"
+        },
+        {
+          "value": "he",
+          "label": "Hebrew"
+        },
+        {
+          "value": "hu",
+          "label": "Hungarian"
+        },
+        {
+          "value": "is",
+          "label": "Icelandic"
+        },
+        {
+          "value": "id",
+          "label": "Indonesian"
+        },
+        {
+          "value": "it",
+          "label": "Italian"
+        },
+        {
+          "value": "ja",
+          "label": "Japanese"
+        },
+        {
+          "value": "ko",
+          "label": "Korean"
+        },
+        {
+          "value": "lt",
+          "label": "Lithuanian"
+        },
+        {
+          "value": "ml",
+          "label": "Malayalam"
+        },
+        {
+          "value": "pl",
+          "label": "Polish"
+        },
+        {
+          "value": "pt-br",
+          "label": "Portuguese (Brazil)"
+        },
+        {
+          "value": "pt-pt",
+          "label": "Portuguese (Portugal)"
+        },
+        {
+          "value": "ro",
+          "label": "Romanian"
+        },
+        {
+          "value": "ru",
+          "label": "Russian"
+        },
+        {
+          "value": "sr",
+          "label": "Serbian"
+        },
+        {
+          "value": "sk",
+          "label": "Slovak"
+        },
+        {
+          "value": "sl",
+          "label": "Slovenian"
+        },
+        {
+          "value": "es",
+          "label": "Spanish"
+        },
+        {
+          "value": "sv",
+          "label": "Swedish"
+        },
+        {
+          "value": "th",
+          "label": "Thai"
+        },
+        {
+          "value": "tr",
+          "label": "Turkish"
+        },
+        {
+          "value": "uk",
+          "label": "Ukrainian"
         }
       ]
     },
@@ -453,13 +741,6 @@
           "label": "Textured, for screens"
         }
       ]
-    },
-    {
-      "name": "credit",
-      "type": "boolean",
-      "label": "Credit line under the page",
-      "default": true,
-      "help": "Names the artists of the plates on the page, and Fugleramme, whose cut-outs they are (CC BY-SA 4.0)."
     }
   ]
 }

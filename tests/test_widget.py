@@ -50,18 +50,61 @@ def _plate() -> bytes:
 PLATE = _plate()
 
 
-def _fake_download(fail: set[str] | None = None):
-    """Writes a synthetic plate where the real one would land. Faces fail, so
-    the names are set in a face the machine has, as when a fetch fails."""
+# Japanese names for the demo garden, as BirdNET's ja label list has them.
+JA = {
+    "Turdus merula": "クロウタドリ",
+    "Parus major": "シジュウカラ",
+    "Cyanistes caeruleus": "アオガラ",
+    "Passer domesticus": "イエスズメ",
+    "Fringilla coelebs": "ズアオアトリ",
+    "Erithacus rubecula": "ヨーロッパコマドリ",
+}
+LABEL_LISTS = {"ja": JA, "no": {"Turdus merula": "Svarttrost", "Parus major": "Kjøttmeis"}}
+
+# A face this machine has for each fetched one: Latin for the label italic, a
+# CJK-covering one for Noto Sans CJK. None found means the fetch fails.
+LATIN_FACES = (
+    "/System/Library/Fonts/Supplemental/Georgia Italic.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf",
+)
+CJK_FACES = (
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+)
+
+
+def _have(paths) -> Path | None:
+    return next((Path(p) for p in paths if Path(p).is_file()), None)
+
+
+def _fake_download(fail: set[str] | None = None, faces: bool = False):
+    """Writes a synthetic plate where the real one would land, and a label list
+    of a few names. Faces fail unless `faces`, so the names are set in a face
+    the machine has, as when a fetch fails; with `faces`, a face of the machine's
+    own stands in for each one fetched."""
     calls: list[str] = []
 
     def download(url: str, target: Path) -> bool:
         calls.append(url)
-        if target.suffix != ".webp" or (fail and target.name in fail):
+        body: bytes | None = None
+        if fail and target.name in fail:
+            body = None
+        elif target.suffix == ".webp":
+            body = PLATE
+        elif target.suffix == ".txt":
+            names = LABEL_LISTS.get(target.stem, {})
+            body = "".join(f"{s}_{c}\n" for s, c in names.items()).encode() or None
+        elif faces and target.suffix in (".ttf", ".otf"):
+            stand_in = _have(CJK_FACES if "CJK" in target.name else LATIN_FACES)
+            body = stand_in.read_bytes() if stand_in else None
+        if body is None:
             assets._missed(target)
             return False
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(PLATE)
+        target.write_bytes(body)
         return True
 
     return download, calls
@@ -284,6 +327,14 @@ def _birdnet(status: int = 200):
             return 200, {}, json.dumps(summary).encode()
         if "/detections/recent" in url:
             return 200, {}, json.dumps(recent).encode()
+        if "/species/all" in url:
+            rows = [
+                {"scientificName": r["scientific_name"], "commonName": r["common_name"]}
+                for r in summary
+            ]
+            return 200, {}, json.dumps({"species": rows}).encode()
+        if "/settings/birdnet" in url:
+            return 200, {}, json.dumps({"locale": "no"}).encode()
         return 404, {}, b"{}"
 
     return answer
@@ -296,7 +347,10 @@ def test_birdnet_go_page_uses_its_names(tmp_path, offline):
         )
     assert data["demo"] is False and data["birds"] == 2
     job = plan.load(data["job"], assets.Store(tmp_path))
-    assert job["table"]["common"]["Turdus merula"] == "Svarttrost"
+    # The detector's own language is Fugleramme's STATION: /species/all, and
+    # the dates follow birdnet.locale.
+    assert job["primary"] == "station" and job["locale"] == "no"
+    assert job["table"]["station"]["Turdus merula"] == "Svarttrost"
 
 
 def test_birdnet_go_wanting_a_password_is_said_plainly(tmp_path, offline):
@@ -307,7 +361,7 @@ def test_birdnet_go_wanting_a_password_is_said_plainly(tmp_path, offline):
 
 def test_unreachable_birdnet_go_is_an_error_not_an_empty_page(tmp_path, offline):
     def refuse(self, url, method="GET", headers=None, data=None):
-        raise plan.Unavailable("unreachable")
+        raise server._source.Unavailable("unreachable")
 
     with patch.object(plan.ApiSource, "_open", refuse):
         data = server.fetch({"address": "gone.test:8080"}, {}, ctx=_ctx(tmp_path))
@@ -379,3 +433,83 @@ def test_cmap_reader_knows_a_face():
     points = cmap.codepoints(face)
     assert points and ord("A") in points and ord("z") in points
     assert cmap.codepoints(ROOT / "plugin.json") is None
+
+
+# -- languages -------------------------------------------------------------------
+
+
+def test_language_catalog_matches_the_manifest():
+    manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
+    by_name = {o["name"]: o for o in manifest["cell_options"]}
+    primary = [c["value"] for c in by_name["names"]["choices"]]
+    assert primary[:4] == ["sci", "common", "en", "nb"]
+    assert set(primary) == set(plan.LANGUAGES)
+    assert {"ja", "zh", "ko", "he", "ar", "th", "ml", "pt-br"} <= set(primary)
+    second = [c["value"] for c in by_name["second"]["choices"]]
+    assert second == ["", *primary]
+    assert set(assets.LABEL_FILES) == set(plan.LANGUAGES) - {"sci", "common", "en"}
+    assert assets.LABELS.format("ja").endswith("BirdNET_GLOBAL_6K_V2.4_Labels_ja.txt")
+
+
+def test_names_come_from_the_label_list_in_the_demo_garden(tmp_path, offline):
+    data = server.fetch({"names": "ja", **SMALL}, {}, ctx=_ctx(tmp_path))
+    job = plan.load(data["job"], assets.Store(tmp_path))
+    assert job["primary"] == "ja"
+    assert job["table"]["ja"]["Turdus merula"] == "クロウタドリ"
+    assert any(url.endswith("Labels_ja.txt") for url in offline)
+
+
+def test_second_language_stacks_under_in_parentheses(tmp_path, offline):
+    data = server.fetch({"names": "en", "second": "nb", **SMALL}, {}, ctx=_ctx(tmp_path))
+    job = plan.load(data["job"], assets.Store(tmp_path))
+    namer = plan.namer_for(job)
+    assert namer.label("Turdus merula") == "Eurasian Blackbird\n(Svarttrost)"
+    # A bird the second language has no name for is named in it scientifically.
+    assert namer.label("Sitta europaea") == "Eurasian Nuthatch\n(Sitta europaea)"
+    page = importlib.import_module(f"{server._PACKAGE}.fugleramme.render.page")
+    fonts = importlib.import_module(f"{server._PACKAGE}.fugleramme.render.fonts")
+    font = fonts.load("gentium", 24)
+    one = page.text_mask("Eurasian Blackbird", font, flat=True)
+    two = page.text_mask(namer.label("Turdus merula"), font, flat=True)
+    assert two.height > one.height * 1.6
+
+
+def test_a_japanese_name_is_set_in_the_fallback_face(tmp_path):
+    if _have(CJK_FACES) is None or _have(LATIN_FACES) is None:
+        pytest.skip("no CJK face on this machine to stand in for Noto Sans CJK")
+    download, _calls = _fake_download(faces=True)
+    with patch.object(assets, "_download", download):
+        data = server.fetch({"names": "ja", "name_key": True, **SMALL}, {}, ctx=_ctx(tmp_path))
+        store = assets.Store(tmp_path)
+        job = plan.load(data["job"], store)
+        assert "fonts/noto/NotoSansCJKsc-Regular.otf" in job["fonts"]
+        ctx = plan.context_of(job, plan.Replay(job["calls"]), store, (320, 200))
+        modes = importlib.import_module(f"{server._PACKAGE}.fugleramme.modes")
+        fonts = importlib.import_module(f"{server._PACKAGE}.fugleramme.render.fonts")
+        assert modes._labeller(ctx)("Turdus merula") == "クロウタドリ"
+        face = fonts.face("クロウタドリ", fonts.load(job["font"], 24))
+        assert face.path.endswith("NotoSansCJKsc-Regular.otf")
+        png = server.page_png(data["job"], 320, 200, store)
+    assert Image.open(io.BytesIO(png)).size == (320, 200)
+
+
+def test_a_name_no_face_can_set_shows_as_the_scientific_name(tmp_path):
+    download, _calls = _fake_download(fail={"NotoSansCJKsc-Regular.otf"}, faces=True)
+    with patch.object(assets, "_download", download):
+        data = server.fetch({"names": "ja", **SMALL}, {}, ctx=_ctx(tmp_path))
+        store = assets.Store(tmp_path)
+        job = plan.load(data["job"], store)
+        ctx = plan.context_of(job, plan.Replay(job["calls"]), store, (320, 200))
+        modes = importlib.import_module(f"{server._PACKAGE}.fugleramme.modes")
+        assert job["table"]["ja"]["Turdus merula"] == "クロウタドリ"
+        assert modes._labeller(ctx)("Turdus merula") == "Turdus merula"
+
+
+def test_credit_line_is_always_on(tmp_path, offline):
+    manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
+    assert "credit" not in {o["name"] for o in manifest["cell_options"]}
+    client = (ROOT / "client.js").read_text(encoding="utf-8")
+    assert "options.credit" not in client and "opts.credit" not in client
+    data = server.fetch({"mode": "latest"}, {}, ctx=_ctx(tmp_path))
+    assert data["strip"] > 0
+    assert data["credit_short"] == "Plates from Fugleramme, CC BY-SA 4.0"

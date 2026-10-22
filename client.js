@@ -24,14 +24,8 @@ function wrap(paper, body) {
 }
 
 function credit(d, px) {
-  if (!px) return '';
   const size = Math.max(9, Math.round(px * 0.62));
   return `<div class="cr" style="height:${px}px;font-size:${size}px"><span>${esc(d.credit || 'Plates from Fugleramme, CC BY-SA 4.0')}</span></div>`;
-}
-
-function on(value, fallback) {
-  if (value === undefined || value === null || value === '') return fallback;
-  return value === true || value === 'true' || value === 1 || value === '1';
 }
 
 /* The picture's bitmap, ready before render() returns, or given up on after a while. */
@@ -45,7 +39,6 @@ function decoded(img, ms) {
 
 export default async function render(shadow, ctx) {
   const d = (ctx && ctx.data) || {};
-  const opts = (ctx && ctx.cell && ctx.cell.options) || {};
   if (d.error || !d.job) {
     const body = d.error || 'Nothing to show yet.';
     shadow.innerHTML = wrap(d.paper, `<div class="msg"><div class="msg-t">Fugleramme</div><div class="msg-b">${esc(body)}</div></div>`);
@@ -53,7 +46,8 @@ export default async function render(shadow, ctx) {
   }
   const w = Math.max(16, Math.round(d.cell_w || (ctx.cell && ctx.cell.w) || 800));
   const h = Math.max(16, Math.round(d.cell_h || (ctx.cell && ctx.cell.h) || 480));
-  const strip = on(opts.credit, true) ? (d.strip || Math.max(12, Math.min(22, Math.round(Math.min(w, h) * 0.026)))) : 0;
+  /* The plates are CC BY-SA: their credit line is always under the page. */
+  const strip = d.strip || Math.max(12, Math.min(22, Math.round(Math.min(w, h) * 0.026)));
   const url = new URL('./page.png', import.meta.url);
   url.searchParams.set('job', d.job);
   url.searchParams.set('w', String(w));

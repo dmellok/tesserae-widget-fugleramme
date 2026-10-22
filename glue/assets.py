@@ -36,6 +36,25 @@ REPO = "https://github.com/arnegiacomo/fugleramme"
 RAW = "https://raw.githubusercontent.com/arnegiacomo/fugleramme/{pin}/assets/{path}"
 STYLE = "classic"
 
+# BirdNET v2.4's label lists in other languages, at the BirdNET-Analyzer release
+# Fugleramme's tools/vendor_fonts.py reads them from. They name the birds when no
+# detector does: the demo garden, and species a detector has no name for.
+LABELS = (
+    "https://raw.githubusercontent.com/birdnet-team/BirdNET-Analyzer/v2.4.0/"
+    "birdnet_analyzer/labels/V2.4/BirdNET_GLOBAL_6K_V2.4_Labels_{}.txt"
+)
+# Language code, as Fugleramme and BirdNET-Go's dictionaries spell it, to the
+# label file's own suffix. English is the bundled list.
+LABEL_FILES = {
+    "af": "af", "ar": "ar", "bg": "bg", "ca": "ca", "cs": "cs", "da": "da",
+    "de": "de", "el": "el", "es": "es", "fi": "fi", "fr": "fr", "he": "he",
+    "hr": "hr", "hu": "hu", "id": "in", "is": "is", "it": "it", "ja": "ja",
+    "ko": "ko", "lt": "lt", "ml": "ml", "nl": "nl", "nb": "no", "pl": "pl",
+    "pt-br": "pt_BR", "pt-pt": "pt_PT", "ro": "ro", "ru": "ru", "sk": "sk",
+    "sl": "sl", "sr": "sr", "sv": "sv", "th": "th", "tr": "tr", "uk": "uk",
+    "zh": "zh",
+}  # fmt: skip
+
 HERE = Path(__file__).resolve().parents[1]
 BUNDLED_STYLE = HERE / "assets" / "artwork" / STYLE
 # Copied next to the fetched plates: the vendored names/sizes modules read a
@@ -101,21 +120,38 @@ class Store:
         return [rel for rel in dict.fromkeys(rels) if not self.have(rel)]
 
     def _submit(self, rel: str) -> concurrent.futures.Future[bool] | None:
-        target = self.path(rel)
-        if target.is_file():
+        return submit(url_for(rel), self.path(rel))
+
+    def labels(self, code: str, wait: float = 0.0) -> Path | None:
+        """BirdNET v2.4's label list in a language, fetched from BirdNET-Analyzer
+        where Fugleramme's own tools read it, or None while it is not here."""
+        suffix = LABEL_FILES.get(code)
+        if suffix is None:
             return None
-        with _lock:
-            running = _inflight.get(target)
-            if running is not None:
-                return running
-            miss = target.with_name(target.name + ".miss")
-            with contextlib.suppress(OSError):
-                if time.time() - miss.stat().st_mtime < RETRY_S:
-                    return None
-            future = _pool.submit(_download, url_for(rel), target)
-            _inflight[target] = future
-            future.add_done_callback(lambda _f, t=target: _done(t))
-            return future
+        target = self.data_dir / "labels" / f"{suffix}.txt"
+        future = submit(LABELS.format(suffix), target)
+        if future is not None and wait > 0:
+            concurrent.futures.wait([future], timeout=wait)
+        return target if target.is_file() else None
+
+
+def submit(url: str, target: Path) -> concurrent.futures.Future[bool] | None:
+    """Start fetching `url` into `target` unless it is there, on its way, or
+    failed within `RETRY_S`. The fetch in flight, if there is one."""
+    if target.is_file():
+        return None
+    with _lock:
+        running = _inflight.get(target)
+        if running is not None:
+            return running
+        miss = target.with_name(target.name + ".miss")
+        with contextlib.suppress(OSError):
+            if time.time() - miss.stat().st_mtime < RETRY_S:
+                return None
+        future = _pool.submit(_download, url, target)
+        _inflight[target] = future
+        future.add_done_callback(lambda _f, t=target: _done(t))
+        return future
 
 
 def _done(target: Path) -> None:
@@ -133,6 +169,12 @@ def _valid(target: Path, body: bytes) -> bool:
         return body[:8] == b"\x89PNG\r\n\x1a\n"
     if suffix in (".ttf", ".otf"):
         return body[:4] in (b"\x00\x01\x00\x00", b"OTTO", b"true", b"ttcf")
+    if suffix == ".txt":  # a label list: "Genus species_Common name" lines
+        try:
+            first = body.decode("utf-8").split("\n", 1)[0]
+        except UnicodeDecodeError:
+            return False
+        return "_" in first and "<" not in first
     return bool(body)
 
 

@@ -25,8 +25,7 @@ widget generates one.
 The plates are not in this repository or its release. The widget fetches each
 one from Fugleramme's repository at the pinned commit the first time a page
 draws it, and keeps it in its data folder. Every page carries a credit line
-naming the artists of the plates on it and Fugleramme (it can be turned off in
-the cell's options).
+naming the artists of the plates on it and Fugleramme; it cannot be turned off.
 
 - [`assets/artwork/classic/ATTRIBUTION.md`](assets/artwork/classic/ATTRIBUTION.md):
   every work the plates were cut from, with its terms. Unmodified from
@@ -47,6 +46,11 @@ the cell's options).
 - `assets/birdnet_labels_v2.4.txt`: the BirdNET v2.4 label list (scientific and
   English names), as Fugleramme ships it. BirdNET is by the Cornell Lab of
   Ornithology and Chemnitz University of Technology.
+
+- BirdNET v2.4's label lists in other languages are not shipped: the widget
+  fetches the one a page is named in from
+  [BirdNET-Analyzer v2.4.0](https://github.com/birdnet-team/BirdNET-Analyzer/tree/v2.4.0/birdnet_analyzer/labels/V2.4)
+  on first use, where Fugleramme's own tools read them.
 
 ## Label faces
 

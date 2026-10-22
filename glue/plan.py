@@ -29,10 +29,10 @@ from typing import Any
 
 from PIL import Image
 
-from ..fugleramme import modes, names, taxa
+from ..fugleramme import languages, modes, names, taxa
 from ..fugleramme.api import ApiSource
 from ..fugleramme.birdweather import BirdWeatherSource
-from ..fugleramme.languages import NONE, SCIENTIFIC, Namer
+from ..fugleramme.languages import NONE, SCIENTIFIC, STATION, Namer
 from ..fugleramme.render import fonts, packing
 from ..fugleramme.render.collage import DEFAULT_MARGIN, DEFAULT_RANKING, NO_LIMIT, RANKINGS
 from ..fugleramme.render.page import Edges, blank, day_ordinal
@@ -42,7 +42,6 @@ from ..fugleramme.source import (
     BIRDWEATHER,
     Detection,
     Species,
-    Unavailable,
     station_fault,
     station_pages,
     with_scheme,
@@ -56,9 +55,12 @@ log = logging.getLogger(__name__)
 # cached PNG from before is not served.
 RENDER_VERSION = 1
 
-COMMON = "common"  # the names the detector sends, else BirdNET's English label
-ENGLISH = "en"  # BirdNET v2.4's own English label
-LANGUAGES = (SCIENTIFIC, COMMON, ENGLISH)
+COMMON = "common"  # the detector's own species language (Fugleramme's STATION)
+ENGLISH = "en"  # BirdNET v2.4's own English label, bundled
+# Every language a page can be named in: the pseudo-languages, English, and each
+# BirdNET v2.4 label language, coded as BirdNET-Go's dictionaries code them.
+LANGUAGES = (SCIENTIFIC, COMMON, ENGLISH, *assets.LABEL_FILES)
+LABEL_WAIT_S = 2.0
 
 MODES = tuple(modes.MODES)
 LOOKBACKS = (0.25, 0.5, 1, 3, 6, 12, 24, 72, 168, 720, 0)
@@ -333,44 +335,87 @@ def _heard(calls: dict[str, Any]) -> set[str]:
     return {_name_of(row) for rows in calls.values() for row in rows or []}
 
 
-def _detector_names(source: Any, species: set[str]) -> dict[str, str]:
-    """The common names the detector itself uses, for the species on the page.
-    BirdNET-Go's are in whatever language it is set to; BirdWeather's English."""
+_names_lock = threading.Lock()
+
+
+def _label_names(code: str, store: assets.Store, species: set[str], wait: float) -> dict:
+    """A language's names from BirdNET's label list, under the scientific name as
+    the list has it and as the detector reports it now (`names.canonical`)."""
+    if code == ENGLISH:
+        return {name: common for name in species if (common := taxa.common_of(name))}
+    path = store.labels(code, wait=wait)
+    if path is None:
+        return {}
     found: dict[str, str] = {}
-    with contextlib.suppress(Unavailable, AttributeError, KeyError, TypeError):
-        if isinstance(source, ApiSource):
-            for row in source._summary():
-                common = str(row.get("common_name") or "").strip()
-                if common:
-                    found[names.canonical(str(row["scientific_name"]))] = common
-        elif isinstance(source, BirdWeatherSource):
-            found.update(source.common_names().get("en", {}))
-    return {name: found[name] for name in species if name in found}
+    with contextlib.suppress(OSError, UnicodeDecodeError):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            sci, _, common = line.partition("_")
+            sci, common = sci.strip(), common.strip()
+            if not common or common.lower() == sci.lower():
+                continue
+            for key in (sci, names.canonical(sci)):
+                if key in species:
+                    found.setdefault(key, common)
+    return found
 
 
-def names_for(primary: str, secondary: str, source: Any, species: set[str]) -> dict:
-    """{language: {scientific name: common name}} for the languages a page reads."""
+def language_codes(choice: str, source: Any) -> str:
+    """The Namer's code for an option's language. The detector's own language is
+    Fugleramme's STATION on a BirdNET-Go, and English on BirdWeather (each
+    species' own commonName) and in the demo garden."""
+    if choice == COMMON:
+        return STATION if isinstance(source, ApiSource) else ENGLISH
+    return choice
+
+
+def names_for(
+    primary: str, secondary: str, source: Any, species: set[str], store: assets.Store, wait: float
+) -> tuple[dict[str, dict[str, str]], str]:
+    """{language: {scientific name: common name}} for the languages a page reads,
+    and the station's locale when the page is in it.
+
+    The detector names a bird as Fugleramme asks it to (`languages.dictionary`:
+    BirdNET-Go's dictionary for the language, its species list in its own
+    language, or BirdWeather's names). Tesserae: BirdNET's label list in the same
+    language fills in a bird the detector has no name for, and names the demo
+    garden, where Fugleramme would show the scientific name."""
+    real = not isinstance(source, DemoSource)
     table: dict[str, dict[str, str]] = {}
-    wanted = {primary, secondary} - {SCIENTIFIC, NONE}
-    english = {name: common for name in species if (common := taxa.common_of(name))}
-    if ENGLISH in wanted:
-        table[ENGLISH] = english
-    if COMMON in wanted:
-        heard = {} if isinstance(source, DemoSource) else _detector_names(source, species)
-        table[COMMON] = {**english, **heard}
-    return table
+    locale = ""
+    with _names_lock:
+        languages.use(source if real else None)
+        try:
+            for code in dict.fromkeys((primary, secondary)):
+                if code in (SCIENTIFIC, NONE):
+                    continue
+                heard: dict[str, str] = {}
+                if real:
+                    said, _version = languages.dictionary(code, store.data_dir)
+                    heard = {names.canonical(sci): common for sci, common in said.items()}
+                    heard.update(said)
+                filled = {} if code == STATION else _label_names(code, store, species, wait)
+                table[code] = {
+                    name: common
+                    for name in species
+                    if (common := heard.get(name) or filled.get(name))
+                }
+            if primary == STATION:
+                locale = languages.station_locale()
+        finally:
+            languages.use(None)
+    return table, locale
 
 
-def namer_for(primary: str, secondary: str, table: dict) -> Namer:
+def namer_for(job: dict[str, Any]) -> Namer:
+    table = job["table"]
     digest = hashlib.blake2b(json.dumps(table, sort_keys=True).encode(), digest_size=6).hexdigest()
-    namer = Namer(primary, secondary, table, ((primary, secondary, digest),))
-    # Dates are written in English unless the page is in scientific names,
-    # where Fugleramme writes them in figures.
-    namer._dates = SCIENTIFIC if primary == SCIENTIFIC else ENGLISH
-    return namer
-
-
-# -- the job -----------------------------------------------------------------
+    return Namer(
+        job["primary"],
+        job["secondary"],
+        table,
+        ((job["primary"], job["secondary"], job["locale"], digest),),
+        job["locale"],
+    )
 
 
 def context_of(job: dict[str, Any], source: Any, store: assets.Store, size=(0, 0)):
@@ -384,7 +429,7 @@ def context_of(job: dict[str, Any], source: Any, store: assets.Store, size=(0, 0
         images_dir=store.artwork,
         style=assets.STYLE,
         day=job["day"],
-        namer=namer_for(job["names"], job["second"], job["table"]),
+        namer=namer_for(job),
         resolution=tuple(size),
         show_names=job["show_names"],
         name_key=keyed,
@@ -436,7 +481,7 @@ def _font_files(
     _label, main = fonts.FONTS.get(job["font"], fonts.FONTS[fonts.DEFAULT_FONT])
     files = [f"fonts/{main}"]
     store.ensure(files, wait=wait)
-    lines = [line for label in labels for line in label.split("\n")]
+    lines = [line for label in labels for line in label.split("\n") if line]
     if store.have(files[0]):
         short = any(not fonts._covers(str(store.path(files[0])), line) for line in lines)
     else:
@@ -470,15 +515,22 @@ def plan(opts: Options, source: Any, store: assets.Store, wait: float = 3.0) -> 
         "margin": opts.margin,
         "textured": opts.textured,
         "table": {},
+        "primary": language_codes(opts.names, source),
+        "secondary": NONE,
+        "locale": "",
         "demo": opts.demo,
     }
+    second = language_codes(opts.second, source)
+    job["secondary"] = NONE if second == job["primary"] else second
     ctx = context_of(job, recorder, store)
     # Everything the page will ask the detector, asked now: the mode's own key
     # and the species it is about read the same answers its render does.
     species = _subjects(ctx)
     modes.state_key(ctx)
-    job["table"] = names_for(job["names"], job["second"], source, _heard(recorder.calls))
-    ctx = replace(ctx, namer=namer_for(job["names"], job["second"], job["table"]))
+    job["table"], job["locale"] = names_for(
+        job["primary"], job["secondary"], source, _heard(recorder.calls), store, LABEL_WAIT_S
+    )
+    ctx = replace(ctx, namer=namer_for(job))
     job["calls"] = recorder.calls
     art = _art(ctx, species, store)
     job["art"] = art
@@ -489,6 +541,10 @@ def plan(opts: Options, source: Any, store: assets.Store, wait: float = 3.0) -> 
     store.ensure(plates)
     deadline = time.monotonic() + wait
     labels = [ctx.namer.label(name) for name in species]
+    # The single-plate pages write a date in the page's language too.
+    if job["mode"] != "collage" and species:
+        now = datetime.now().astimezone()
+        labels += [ctx.namer.moment(now), ctx.namer.date(now)]
     job["fonts"] = _font_files(job, labels, store, wait)
     store.ensure([*job["fonts"], *plates], wait=max(0.0, deadline - time.monotonic()))
     job["key"] = _key(modes.state_key(ctx), job)
