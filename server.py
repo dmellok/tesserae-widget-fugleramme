@@ -54,10 +54,12 @@ assets = importlib.import_module(f"{_PACKAGE}.glue.assets")
 plan = importlib.import_module(f"{_PACKAGE}.glue.plan")
 _source = importlib.import_module(f"{_PACKAGE}.fugleramme.source")
 
-# How long fetch() waits for plates and faces it starts fetching. Tesserae gives
-# a widget's fetch six seconds; the page route waits for the rest.
-FETCH_WAIT_S = 2.0
-PAGE_WAIT_S = 20.0
+# Nothing waits on a download: fetch() starts them and the page is drawn with
+# what has arrived, then drawn again as the rest lands. Until then fetch() asks
+# the editor and a scheduled send's warm to come back this often.
+LIVE_REFRESH_S = 4
+FIRST_WAIT_S = 3.0
+FIRST_WANT = 3
 MAX_SIDE = 4096
 PAGES_KEPT = 120
 
@@ -98,7 +100,9 @@ def fetch(options: dict, settings: dict, *, ctx: dict) -> dict:
     opts = plan.options_of(options)
     try:
         source = plan.source_for(opts)
-        job = plan.plan(opts, source, store, wait=FETCH_WAIT_S)
+        # One tray card for everything this page starts fetching.
+        with assets.batch():
+            job = plan.plan(opts, source, store)
     except plan.BadInput as error:
         return {"error": str(error)}
     except _source.Unavailable as error:
@@ -108,7 +112,10 @@ def fetch(options: dict, settings: dict, *, ctx: dict) -> dict:
     cell_w = int(ctx.get("cell_w") or 0)
     cell_h = int(ctx.get("cell_h") or 0)
     birds = len(job["art"])
+    pending = assets.in_flight(_wanted(job, store))
+    hints = {"live_refresh_s": LIVE_REFRESH_S, "live_pending": pending} if pending else {}
     return {
+        **hints,
         "job": job["key"],
         "mode": job["mode"],
         "demo": job["demo"],
@@ -120,6 +127,17 @@ def fetch(options: dict, settings: dict, *, ctx: dict) -> dict:
         "cell_h": cell_h,
         "strip": strip_px(cell_w, cell_h) if cell_w and cell_h else 0,
     }
+
+
+def _files(job: dict) -> list[str]:
+    """What the job's page is drawn from, under assets/."""
+    return [*job["fonts"], *job["art"].values(), *([job["perch"]] if job["perch"] else [])]
+
+
+def _wanted(job: dict, store: Any) -> list[Path]:
+    """Everything the page waits on: its files and its name lists."""
+    lists = [store.label_path(code) for code in (job["primary"], job["secondary"])]
+    return [*(store.path(rel) for rel in _files(job)), *(p for p in lists if p)]
 
 
 def _store() -> Any:
@@ -145,9 +163,14 @@ def page_png(key: str, w: int, h: int, store: Any) -> bytes | None:
     if job is None:
         return None
     w, h = max(16, min(MAX_SIDE, w)), max(16, min(MAX_SIDE, h))
-    wanted = [*job["fonts"], *job["art"].values(), *([job["perch"]] if job["perch"] else [])]
-    # Whatever fetch() started for this page gets a while to arrive first.
-    missing = assets.pending(wanted, store, PAGE_WAIT_S)
+    # Drawn with what has arrived: a bird whose plate is still on its way is
+    # left off, a face still on its way stands in with a system one. Only a page
+    # with no plate at all yet gives the first few a moment (FIRST_WAIT_S, well
+    # inside Tesserae's render budget) rather than drawing a bare sheet.
+    plates = [store.path(rel) for rel in job["art"].values()]
+    if plates and not any(path.is_file() for path in plates):
+        assets.first_arrivals(plates, min(FIRST_WANT, len(plates)), FIRST_WAIT_S)
+    missing = [rel for rel in _files(job) if not store.have(rel)]
     # A page drawn without some of its files is kept under a name of its own,
     # so it is drawn again once they arrive rather than held for good.
     gap = "_" + hashlib.blake2b("|".join(missing).encode(), digest_size=4).hexdigest()

@@ -23,10 +23,16 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+try:  # Tesserae's progress tray; an older host has none
+    from app import jobs
+except Exception:
+    jobs = None
 
 # Fugleramme v0.29.0. Bumping it re-fetches everything into a new folder, so the
 # bundled manifest and geometry must come from the same commit.
@@ -114,13 +120,18 @@ class Store:
     def ensure(self, rels: Iterable[str], wait: float = 0.0) -> list[str]:
         """Start fetching whatever of `rels` is missing and wait up to `wait`
         seconds for it. Returns the ones still missing."""
-        futures = [f for rel in dict.fromkeys(rels) if (f := self._submit(rel)) is not None]
+        with batch():
+            futures = [f for rel in dict.fromkeys(rels) if (f := self._submit(rel)) is not None]
         if futures and wait > 0:
             concurrent.futures.wait(futures, timeout=wait)
         return [rel for rel in dict.fromkeys(rels) if not self.have(rel)]
 
     def _submit(self, rel: str) -> concurrent.futures.Future[bool] | None:
         return submit(url_for(rel), self.path(rel))
+
+    def label_path(self, code: str) -> Path | None:
+        suffix = LABEL_FILES.get(code)
+        return None if suffix is None else self.data_dir / "labels" / f"{suffix}.txt"
 
     def labels(self, code: str, wait: float = 0.0) -> Path | None:
         """BirdNET v2.4's label list in a language, fetched from BirdNET-Analyzer
@@ -129,7 +140,8 @@ class Store:
         if suffix is None:
             return None
         target = self.data_dir / "labels" / f"{suffix}.txt"
-        future = submit(LABELS.format(suffix), target)
+        with batch():
+            future = submit(LABELS.format(suffix), target)
         if future is not None and wait > 0:
             concurrent.futures.wait([future], timeout=wait)
         return target if target.is_file() else None
@@ -150,13 +162,100 @@ def submit(url: str, target: Path) -> concurrent.futures.Future[bool] | None:
                 return None
         future = _pool.submit(_download, url, target)
         _inflight[target] = future
-        future.add_done_callback(lambda _f, t=target: _done(t))
-        return future
+        _batch["total"] += 1
+        _batch["kinds"][_kind(target)] += 1
+    future.add_done_callback(lambda f, t=target: _done(t, f))
+    return future
 
 
-def _done(target: Path) -> None:
+def in_flight(targets: Iterable[Path]) -> int:
+    """How many of `targets` are being fetched now."""
+    with _lock:
+        return sum(1 for target in targets if target in _inflight)
+
+
+# The downloads since the tray last went quiet: one card for all of them.
+_batch: dict = {"total": 0, "done": 0, "failed": 0, "kinds": Counter(), "opening": 0}
+
+
+@contextlib.contextmanager
+def batch():
+    """While a page's files are being handed out, the card is not over even if
+    the ones handed out so far have all landed: one card per page, not per file."""
+    with _lock:
+        _batch["opening"] += 1
+    try:
+        yield
+    finally:
+        with _lock:
+            _batch["opening"] -= 1
+        _report()
+
+
+SOURCE, KEY, LABEL = "fugleramme", "assets", "Fugleramme"
+TITLE = "Fetching plates from Fugleramme"
+
+
+def _kind(target: Path) -> str:
+    if target.suffix == ".txt":
+        return "name list"
+    if target.suffix in (".ttf", ".otf"):
+        return "typeface"
+    return "plate"
+
+
+def _count(n: int, kind: str) -> str:
+    return f"{n} {kind}" + ("" if n == 1 else "s")
+
+
+def _summary(kinds: Counter) -> str:
+    """ "17 plates and 1 typeface" """
+    parts = [_count(kinds[k], k) for k in ("plate", "typeface", "name list") if kinds[k]]
+    return " and ".join(parts) if len(parts) < 3 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _done(target: Path, future: concurrent.futures.Future[bool]) -> None:
+    try:
+        ok = bool(future.result())
+    except Exception:
+        ok = False
     with _lock:
         _inflight.pop(target, None)
+        _batch["done"] += 1
+        _batch["failed"] += 0 if ok else 1
+    _report()
+
+
+def _report() -> None:
+    """The tray's card for the downloads in hand, finished or failed once the
+    last of them is in. Every call is guarded: the tray is a nicety."""
+    with _lock:
+        total, done, failed = _batch["total"], _batch["done"], _batch["failed"]
+        kinds = Counter(_batch["kinds"])
+        over = total > 0 and done >= total and not _inflight and not _batch["opening"]
+        if over:
+            _batch.update(total=0, done=0, failed=0, kinds=Counter())
+    if jobs is None or total == 0:
+        return
+    try:
+        if not over:
+            plates = kinds["plate"]
+            what = (
+                f"{min(done, total)} of {_summary(kinds)}"
+                if plates != total
+                else (f"{min(done, total)} of {_count(total, 'plate')}")
+            )
+            jobs.report(SOURCE, KEY, TITLE, progress=done / total, detail=what, label=LABEL)
+        elif failed:
+            jobs.fail(
+                SOURCE,
+                KEY,
+                f"{_count(failed, 'file')} could not be fetched; trying again within the hour",
+            )
+        else:
+            jobs.finish(SOURCE, KEY, _summary(kinds))
+    except Exception:
+        log.debug("Fugleramme could not report to the tray", exc_info=True)
 
 
 def _valid(target: Path, body: bytes) -> bool:
@@ -210,13 +309,21 @@ def _missed(target: Path) -> None:
         target.with_name(target.name + ".miss").touch()
 
 
-def pending(rels: Iterable[str], store: Store, wait: float) -> list[str]:
-    """Wait up to `wait` seconds for any of `rels` still being fetched, without
-    starting a fetch of its own. The page route uses this: the fetches belong to
-    fetch(), which runs first."""
+def first_arrivals(targets: list[Path], want: int, wait: float) -> int:
+    """Wait up to `wait` seconds until `want` of `targets` are here, returning
+    as soon as they are. Only for a page none of whose plates has arrived: a
+    bare sheet tells nobody anything, and the first plates of a cold cache
+    land within a second or two."""
     deadline = time.monotonic() + wait
-    with _lock:
-        running = [f for rel in rels if (f := _inflight.get(store.path(rel))) is not None]
-    if running:
-        concurrent.futures.wait(running, timeout=max(0.0, deadline - time.monotonic()))
-    return [rel for rel in rels if not store.have(rel)]
+    while True:
+        here = sum(1 for target in targets if target.is_file())
+        left = deadline - time.monotonic()
+        if here >= want or left <= 0:
+            return here
+        with _lock:
+            running = [f for target in targets if (f := _inflight.get(target)) is not None]
+        if not running:
+            return here
+        concurrent.futures.wait(
+            running, timeout=left, return_when=concurrent.futures.FIRST_COMPLETED
+        )

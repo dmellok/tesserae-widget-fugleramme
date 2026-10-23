@@ -9,9 +9,11 @@ import io
 import json
 import re
 import sys
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from PIL import Image, ImageDraw
@@ -124,13 +126,34 @@ def _ctx(tmp_path: Path, w: int = 400, h: int = 300) -> dict:
 SMALL = {"species_limit": "6", "lookback_hours": "24"}
 
 
+def _settle(timeout: float = 10.0) -> None:
+    """Wait for the downloads fetch() started, which nothing in the widget does."""
+    import concurrent.futures
+
+    with assets._lock:
+        running = list(assets._inflight.values())
+    concurrent.futures.wait(running, timeout=timeout)
+
+
+def _fetch_settled(options: dict, ctx: dict) -> dict:
+    """fetch() again and again, as the editor does on live_refresh_s, until
+    nothing it needs is still on its way (a name list landing can ask for a face)."""
+    data = server.fetch(options, {}, ctx=ctx)
+    for _ in range(6):
+        _settle()
+        data = server.fetch(options, {}, ctx=ctx)
+        if "live_pending" not in data:
+            break
+    return data
+
+
 # -- manifest ------------------------------------------------------------------
 
 
 def test_manifest_is_valid():
     manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
     assert manifest["name"] == "Fugleramme"
-    assert manifest["version"] == "0.1.1"
+    assert manifest["version"] == "0.1.2"
     assert manifest["tesserae_compat"] == "1.x"
     assert len(manifest["description"]) <= 280
     assert manifest["requires"] == ["network:*"]
@@ -454,7 +477,7 @@ def test_language_catalog_matches_the_manifest():
 
 
 def test_names_come_from_the_label_list_in_the_demo_garden(tmp_path, offline):
-    data = server.fetch({"names": "ja", **SMALL}, {}, ctx=_ctx(tmp_path))
+    data = _fetch_settled({"names": "ja", **SMALL}, _ctx(tmp_path))
     job = plan.load(data["job"], assets.Store(tmp_path))
     assert job["primary"] == "ja"
     assert job["table"]["ja"]["Turdus merula"] == "クロウタドリ"
@@ -462,7 +485,7 @@ def test_names_come_from_the_label_list_in_the_demo_garden(tmp_path, offline):
 
 
 def test_second_language_stacks_under_in_parentheses(tmp_path, offline):
-    data = server.fetch({"names": "en", "second": "nb", **SMALL}, {}, ctx=_ctx(tmp_path))
+    data = _fetch_settled({"names": "en", "second": "nb", **SMALL}, _ctx(tmp_path))
     job = plan.load(data["job"], assets.Store(tmp_path))
     namer = plan.namer_for(job)
     assert namer.label("Turdus merula") == "Eurasian Blackbird\n(Svarttrost)"
@@ -481,7 +504,7 @@ def test_a_japanese_name_is_set_in_the_fallback_face(tmp_path):
         pytest.skip("no CJK face on this machine to stand in for Noto Sans CJK")
     download, _calls = _fake_download(faces=True)
     with patch.object(assets, "_download", download):
-        data = server.fetch({"names": "ja", "name_key": True, **SMALL}, {}, ctx=_ctx(tmp_path))
+        data = _fetch_settled({"names": "ja", "name_key": True, **SMALL}, _ctx(tmp_path))
         store = assets.Store(tmp_path)
         job = plan.load(data["job"], store)
         assert "fonts/noto/NotoSansCJKsc-Regular.otf" in job["fonts"]
@@ -498,7 +521,7 @@ def test_a_japanese_name_is_set_in_the_fallback_face(tmp_path):
 def test_a_name_no_face_can_set_shows_as_the_scientific_name(tmp_path):
     download, _calls = _fake_download(fail={"NotoSansCJKsc-Regular.otf"}, faces=True)
     with patch.object(assets, "_download", download):
-        data = server.fetch({"names": "ja", **SMALL}, {}, ctx=_ctx(tmp_path))
+        data = _fetch_settled({"names": "ja", **SMALL}, _ctx(tmp_path))
         store = assets.Store(tmp_path)
         job = plan.load(data["job"], store)
         ctx = plan.context_of(job, plan.Replay(job["calls"]), store, (320, 200))
@@ -515,3 +538,121 @@ def test_credit_line_is_always_on(tmp_path, offline):
     data = server.fetch({"mode": "latest"}, {}, ctx=_ctx(tmp_path))
     assert data["strip"] > 0
     assert data["credit_short"] == "Plates from Fugleramme, CC BY-SA 4.0"
+
+
+# -- drawing while plates download -------------------------------------------------
+
+
+def _held_download(arrive: set[str], gate: threading.Event):
+    """Plates in `arrive` land at once; the rest wait for `gate`. Faces fail."""
+    base, calls = _fake_download()
+
+    def download(url: str, target: Path) -> bool:
+        if target.suffix == ".webp" and target.name not in arrive:
+            gate.wait(20)
+        return base(url, target)
+
+    return download, calls
+
+
+def test_a_cold_cache_draws_straight_away_with_what_has_arrived(tmp_path):
+    gate = threading.Event()
+    download, _calls = _held_download({"turdus-merula.webp", "parus-major.webp"}, gate)
+    store = assets.Store(tmp_path)
+    try:
+        with patch.object(assets, "_download", download):
+            started = time.monotonic()
+            data = server.fetch({**SMALL, "show_names": False}, {}, ctx=_ctx(tmp_path))
+            assert time.monotonic() - started < 2.0  # nothing waited on
+            assert data["live_refresh_s"] == server.LIVE_REFRESH_S
+            assert data["live_pending"] >= 1
+            time.sleep(0.3)  # the two that arrive at once
+            started = time.monotonic()
+            png = server.page_png(data["job"], 320, 200, store)
+            assert time.monotonic() - started < 10.0
+            assert Image.open(io.BytesIO(png)).size == (320, 200)
+            # Drawn with pieces missing: kept under a name of its own.
+            kept = [p.name for p in store.pages.glob(f"{data['job']}_320x200*.png")]
+            assert kept and f"{data['job']}_320x200.png" not in kept
+            gate.set()
+            _settle()
+            again = server.fetch({**SMALL, "show_names": False}, {}, ctx=_ctx(tmp_path))
+            assert "live_refresh_s" not in again and "live_pending" not in again
+            server.page_png(again["job"], 320, 200, store)
+            assert (store.pages / f"{again['job']}_320x200.png").exists()
+    finally:
+        gate.set()
+
+
+def test_the_tray_shows_the_download_and_its_end(tmp_path):
+    tray = Mock()
+    download, _calls = _fake_download()
+    with patch.object(assets, "_download", download), patch.object(assets, "jobs", tray):
+        server.fetch({**SMALL, "names": "en"}, {}, ctx=_ctx(tmp_path))
+        _settle()
+        time.sleep(0.1)
+    reports = tray.report.call_args_list
+    assert reports and all(c.args[:3] == ("fugleramme", "assets", assets.TITLE) for c in reports)
+    assert any(" of " in c.kwargs["detail"] for c in reports)
+    assert all(c.kwargs["label"] == "Fugleramme" for c in reports)
+    # The faces fail in this fake, so the card ends as failed, saying why.
+    assert tray.fail.called or tray.finish.called
+
+
+def test_the_tray_finishes_when_everything_lands(tmp_path):
+    tray = Mock()
+    download, _calls = _fake_download()
+    with patch.object(assets, "_download", download), patch.object(assets, "jobs", tray):
+        server.fetch({**SMALL, "show_names": False}, {}, ctx=_ctx(tmp_path))
+        _settle()
+        time.sleep(0.1)
+    tray.finish.assert_called_once()
+    assert tray.finish.call_args.args[:3] == ("fugleramme", "assets", "6 plates")
+    assert not tray.fail.called
+
+
+def test_a_failed_plate_fails_the_card(tmp_path):
+    tray = Mock()
+    download, _calls = _fake_download(fail={"turdus-merula.webp"})
+    with patch.object(assets, "_download", download), patch.object(assets, "jobs", tray):
+        server.fetch({"show_names": False}, {}, ctx=_ctx(tmp_path))
+        _settle()
+        time.sleep(0.1)
+    if tray.fail.called:  # the blackbird wore that plate today
+        assert "could not be fetched" in tray.fail.call_args.args[2]
+    else:
+        assert not tray.fail.called and tray.finish.called
+
+
+def test_an_older_host_without_the_tray_still_draws(tmp_path):
+    download, _calls = _fake_download()
+    with patch.object(assets, "_download", download), patch.object(assets, "jobs", None):
+        data = _fetch_settled(SMALL, _ctx(tmp_path))
+        png = server.page_png(data["job"], 200, 160, assets.Store(tmp_path))
+    assert Image.open(io.BytesIO(png)).size == (200, 160)
+
+
+def test_a_tray_that_raises_never_stops_a_download(tmp_path):
+    tray = Mock()
+    tray.report.side_effect = RuntimeError("tray gone")
+    tray.finish.side_effect = RuntimeError("tray gone")
+    download, _calls = _fake_download()
+    with patch.object(assets, "_download", download), patch.object(assets, "jobs", tray):
+        data = _fetch_settled({**SMALL, "show_names": False}, _ctx(tmp_path))
+    assert "live_pending" not in data
+
+
+def test_a_page_with_no_plate_yet_waits_only_a_moment(tmp_path):
+    gate = threading.Event()
+    download, _calls = _held_download(set(), gate)
+    store = assets.Store(tmp_path)
+    try:
+        with patch.object(assets, "_download", download):
+            data = server.fetch({**SMALL, "show_names": False}, {}, ctx=_ctx(tmp_path))
+            started = time.monotonic()
+            png = server.page_png(data["job"], 200, 160, store)
+            took = time.monotonic() - started
+        assert server.FIRST_WAIT_S - 0.5 < took < server.FIRST_WAIT_S + 3.0
+        assert Image.open(io.BytesIO(png)).size == (200, 160)
+    finally:
+        gate.set()

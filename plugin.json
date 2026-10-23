@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Fugleramme",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "kind": "widget",
   "description": "The birds a BirdNET-Go or BirdWeather station heard, drawn by Fugleramme's own renderer as hand-coloured 1800s plates packed onto one page: the window's collage, the latest bird or the newest arrival. Plates are fetched from Fugleramme on first use. Demo garden until set up.",
   "icon": "ph-bird",
@@ -17,7 +17,8 @@
   ],
   "render": {
     "needs_network": true,
-    "full_bleed": true
+    "full_bleed": true,
+    "warm_ahead_s": 60
   },
   "design": {
     "palette": "extended"

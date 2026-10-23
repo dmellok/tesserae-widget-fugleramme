@@ -33,7 +33,7 @@ from ..fugleramme import languages, modes, names, taxa
 from ..fugleramme.api import ApiSource
 from ..fugleramme.birdweather import BirdWeatherSource
 from ..fugleramme.languages import NONE, SCIENTIFIC, STATION, Namer
-from ..fugleramme.render import fonts, packing
+from ..fugleramme.render import collage, fonts, packing
 from ..fugleramme.render.collage import DEFAULT_MARGIN, DEFAULT_RANKING, NO_LIMIT, RANKINGS
 from ..fugleramme.render.page import Edges, blank, day_ordinal
 from ..fugleramme.render.paper import PANEL_PAPER, TARGET_PAPER
@@ -60,7 +60,9 @@ ENGLISH = "en"  # BirdNET v2.4's own English label, bundled
 # Every language a page can be named in: the pseudo-languages, English, and each
 # BirdNET v2.4 label language, coded as BirdNET-Go's dictionaries code them.
 LANGUAGES = (SCIENTIFIC, COMMON, ENGLISH, *assets.LABEL_FILES)
-LABEL_WAIT_S = 2.0
+# Nothing is waited for: a page is drawn with what has arrived, and drawn
+# again as the rest lands (server.page_png, live_refresh_s).
+LABEL_WAIT_S = 0.0
 
 MODES = tuple(modes.MODES)
 LOOKBACKS = (0.25, 0.5, 1, 3, 6, 12, 24, 72, 168, 720, 0)
@@ -484,14 +486,14 @@ def _font_files(
     lines = [line for label in labels for line in label.split("\n") if line]
     if store.have(files[0]):
         short = any(not fonts._covers(str(store.path(files[0])), line) for line in lines)
-    else:
-        short = any(not line.isascii() for line in lines)
+    else:  # until the face is here, anything past Latin is taken to need a fallback
+        short = any(ord(c) >= 0x250 for line in lines for c in line)
     if short:
         files += [f"fonts/{f.file}" for f in fonts.FALLBACKS]
     return files
 
 
-def plan(opts: Options, source: Any, store: assets.Store, wait: float = 3.0) -> dict[str, Any]:
+def plan(opts: Options, source: Any, store: assets.Store, wait: float = 0.0) -> dict[str, Any]:
     """The job for a cell: what Fugleramme's mode asked the detector, and what
     the page needs fetched. Raises the source's Unavailable."""
     fonts.FONTS_DIR = store.fonts
@@ -535,8 +537,8 @@ def plan(opts: Options, source: Any, store: assets.Store, wait: float = 3.0) -> 
     art = _art(ctx, species, store)
     job["art"] = art
     job["perch"] = None if art else _perch(ctx, store)
-    # The plates start first; the face is waited for, since whether the
-    # fallbacks are needed is read from it; then all of it, within `wait`.
+    # The plates start first, then the faces; nothing is waited for beyond
+    # `wait` (none in the widget: the page draws with what has arrived).
     plates = [*art.values(), *([job["perch"]] if job["perch"] else [])]
     store.ensure(plates)
     deadline = time.monotonic() + wait
@@ -652,8 +654,15 @@ def draw(job: dict[str, Any], size: tuple[int, int], store: assets.Store) -> Ima
         if not missing:
             break
         dropped |= missing
+    stand_in = any(not store.have(rel) for rel in job["fonts"])
     try:
-        return modes.render(ctx).convert("RGB")
+        image = modes.render(ctx).convert("RGB")
+        if stand_in:
+            # The packing reserved room for names set in a stand-in face; the
+            # real face measures differently, so it must not reuse it.
+            with collage._layouts_lock:
+                collage._layouts.clear()
+        return image
     except (OSError, ValueError) as error:
         log.warning("Fugleramme page could not be drawn: %s", error)
         return blank(size, job["textured"])
