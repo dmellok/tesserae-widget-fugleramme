@@ -1,9 +1,9 @@
 {
   "tesserae_compat": "1.x",
   "name": "Fugleramme",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "kind": "widget",
-  "description": "The birds a BirdNET-Go or BirdWeather station heard, drawn by Fugleramme's own renderer as hand-coloured 1800s plates packed onto one page: the window's collage, the latest bird or the newest arrival. Plates are fetched from Fugleramme on first use. Demo garden until set up.",
+  "description": "Fugleramme's hand-coloured 1800s bird plates packed onto one page: the page a running Fugleramme draws, or one drawn here by its renderer from a BirdNET-Go or BirdWeather station (collage, latest bird or newest arrival). Demo garden until set up.",
   "icon": "ph-bird",
   "supports": {
     "sizes": [
@@ -29,8 +29,12 @@
       "type": "select",
       "label": "Detector",
       "default": "birdnet_go",
-      "help": "Where the birds come from. Leave the address or the station empty for a demo garden, so every page can be tried first.",
+      "help": "Where the page comes from. Fugleramme server shows the page a running Fugleramme draws, as its own admin sets it. BirdNET-Go and BirdWeather draw it here with Fugleramme's renderer; leave their address or station empty for a demo garden, so every page can be tried first.",
       "choices": [
+        {
+          "value": "server",
+          "label": "Fugleramme server"
+        },
         {
           "value": "birdnet_go",
           "label": "BirdNET-Go"
@@ -78,6 +82,37 @@
       }
     },
     {
+      "name": "server_address",
+      "type": "string",
+      "label": "Fugleramme address",
+      "default": "",
+      "mask": false,
+      "help": "Where Fugleramme opens, for example http://fugleramme.local:8080. The page, the birds, the names and the paper are set in Fugleramme's own admin. Its page is fetched by this Tesserae and kept, so the panel never has to reach the frame, and the last page stays up while the frame is away.",
+      "show_if": {
+        "source": "server"
+      }
+    },
+    {
+      "name": "server_fit",
+      "type": "select",
+      "label": "Fit",
+      "default": "contain",
+      "help": "Fugleramme draws its page at the size and shape its admin sets (Resolution, or Lock to panel). Whole page shows all of it on Fugleramme's paper; Fill the cell crops what does not fit.",
+      "choices": [
+        {
+          "value": "contain",
+          "label": "Whole page"
+        },
+        {
+          "value": "cover",
+          "label": "Fill the cell"
+        }
+      ],
+      "show_if": {
+        "source": "server"
+      }
+    },
+    {
       "name": "mode",
       "type": "select",
       "label": "Page",
@@ -96,7 +131,13 @@
           "value": "arrival",
           "label": "Newest arrival: the latest first-ever species, with the date"
         }
-      ]
+      ],
+      "show_if": {
+        "source": [
+          "birdnet_go",
+          "birdweather"
+        ]
+      }
     },
     {
       "name": "lookback_hours",
@@ -261,7 +302,13 @@
       "name": "show_names",
       "type": "boolean",
       "label": "Names",
-      "default": true
+      "default": true,
+      "show_if": {
+        "source": [
+          "birdnet_go",
+          "birdweather"
+        ]
+      }
     },
     {
       "name": "name_key",
@@ -724,7 +771,13 @@
           "value": "25",
           "label": "25%"
         }
-      ]
+      ],
+      "show_if": {
+        "source": [
+          "birdnet_go",
+          "birdweather"
+        ]
+      }
     },
     {
       "name": "paper",
@@ -741,7 +794,13 @@
           "value": "textured",
           "label": "Textured, for screens"
         }
-      ]
+      ],
+      "show_if": {
+        "source": [
+          "birdnet_go",
+          "birdweather"
+        ]
+      }
     }
   ]
 }

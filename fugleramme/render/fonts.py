@@ -1,4 +1,4 @@
-# Vendored from Fugleramme v0.29.0 (https://github.com/arnegiacomo/fugleramme).
+# Vendored from Fugleramme v0.31.1 (https://github.com/arnegiacomo/fugleramme).
 # Copyright (c) 2026 Arne Giacomo Munthe-Kaas. MIT License, see LICENSE.
 # Tesserae: coverage is read by cmap.py rather than fontTools; a face not fetched yet stands in with a system one.
 """Vendored typefaces for the species names on the page.

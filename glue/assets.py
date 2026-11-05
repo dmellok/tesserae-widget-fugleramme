@@ -34,10 +34,10 @@ try:  # Tesserae's progress tray; an older host has none
 except Exception:
     jobs = None
 
-# Fugleramme v0.29.0. Bumping it re-fetches everything into a new folder, so the
+# Fugleramme v0.31.1. Bumping it re-fetches everything into a new folder, so the
 # bundled manifest and geometry must come from the same commit.
-PIN = "03046c764748a74bd6ffddf5ed526ceb0c199436"
-VERSION = "0.29.0"
+PIN = "3fae1edce3459aae1a8cca81fa793f74418203c8"
+VERSION = "0.31.1"
 REPO = "https://github.com/arnegiacomo/fugleramme"
 RAW = "https://raw.githubusercontent.com/arnegiacomo/fugleramme/{pin}/assets/{path}"
 STYLE = "classic"

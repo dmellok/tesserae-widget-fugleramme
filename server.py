@@ -53,6 +53,7 @@ _package()
 assets = importlib.import_module(f"{_PACKAGE}.glue.assets")
 plan = importlib.import_module(f"{_PACKAGE}.glue.plan")
 _source = importlib.import_module(f"{_PACKAGE}.fugleramme.source")
+remote = importlib.import_module(f"{_PACKAGE}.glue.remote")
 
 # Nothing waits on a download: fetch() starts them and the page is drawn with
 # what has arrived, then drawn again as the rest lands. Until then fetch() asks
@@ -65,7 +66,7 @@ PAGES_KEPT = 120
 
 # The page route only reads a job fetch() wrote and the files it fetched, so a
 # loopback render may load it with no session.
-RENDER_SAFE_ENDPOINTS: tuple[str, ...] = ("fugleramme_page.page",)
+RENDER_SAFE_ENDPOINTS: tuple[str, ...] = ("fugleramme_page.page", "fugleramme_page.remote")
 
 _drawing = threading.BoundedSemaphore(2)
 _page_locks: dict[str, threading.Lock] = {}
@@ -96,6 +97,8 @@ def strip_px(w: int, h: int) -> int:
 def fetch(options: dict, settings: dict, *, ctx: dict) -> dict:
     global _data_dir
     _data_dir = Path(ctx["data_dir"])
+    if (options or {}).get("source") == remote.SERVER:
+        return _fetch_remote(options, _data_dir)
     store = assets.Store(_data_dir)
     opts = plan.options_of(options)
     try:
@@ -126,6 +129,27 @@ def fetch(options: dict, settings: dict, *, ctx: dict) -> dict:
         "cell_w": cell_w,
         "cell_h": cell_h,
         "strip": strip_px(cell_w, cell_h) if cell_w and cell_h else 0,
+    }
+
+
+def _fetch_remote(options: dict, data_dir: Path) -> dict:
+    """A running Fugleramme's own page (glue.remote), as its admin sets it."""
+    fit = options.get("server_fit")
+    try:
+        got = remote.page(str(options.get("server_address") or ""), data_dir)
+    except remote.Unreachable as error:
+        return {"error": str(error), "remote": True}
+    if got.get("stale"):
+        log.info("Fugleramme server: %s; showing the last page", got.get("reason"))
+    return {
+        "remote": True,
+        "remote_key": got["key"],
+        "fit": fit if fit in remote.FITS else remote.FITS[0],
+        "page_w": got["w"],
+        "page_h": got["h"],
+        "paper": got["paper"],
+        "credit": plan.credit_line([]),
+        "credit_short": plan.credit_line([]),
     }
 
 
@@ -214,6 +238,19 @@ def blueprint():
             abort(400)
         body = page_png(key, w, h, _store())
         if body is None:
+            abort(404)
+        response = Response(body, mimetype="image/png")
+        response.headers["Cache-Control"] = "private, max-age=86400"
+        return response
+
+    @bp.get("/remote.png", endpoint="remote")
+    def remote_page() -> Response:
+        key = request.args.get("key", "")
+        if not remote.valid_key(key):
+            abort(404)
+        try:
+            body = remote.page_path(_store().data_dir, key).read_bytes()
+        except OSError:
             abort(404)
         response = Response(body, mimetype="image/png")
         response.headers["Cache-Control"] = "private, max-age=86400"

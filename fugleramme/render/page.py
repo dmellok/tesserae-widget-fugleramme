@@ -1,4 +1,4 @@
-# Vendored from Fugleramme v0.29.0 (https://github.com/arnegiacomo/fugleramme).
+# Vendored from Fugleramme v0.31.1 (https://github.com/arnegiacomo/fugleramme).
 # Copyright (c) 2026 Arne Giacomo Munthe-Kaas. MIT License, see LICENSE.
 # Tesserae: text is antialiased on the flat page too (flat_mode), since Tesserae
 # quantises the composed page for each panel itself.

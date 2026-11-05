@@ -1,4 +1,4 @@
-# Vendored from Fugleramme v0.29.0 (https://github.com/arnegiacomo/fugleramme).
+# Vendored from Fugleramme v0.31.1 (https://github.com/arnegiacomo/fugleramme).
 # Copyright (c) 2026 Arne Giacomo Munthe-Kaas. MIT License, see LICENSE.
 # Tesserae: the User-Agent names the widget.
 """Public BirdWeather stations as the frame's detection source.

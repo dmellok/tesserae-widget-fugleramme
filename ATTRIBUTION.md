@@ -2,8 +2,8 @@
 
 This widget is a port of [Fugleramme](https://github.com/arnegiacomo/fugleramme)
 by Arne Giacomo Munthe-Kaas, made with his permission and named after it. It
-draws the page with Fugleramme's own renderer, at release v0.29.0 (commit
-`03046c764748a74bd6ffddf5ed526ceb0c199436`). Fugleramme itself is maintained
+draws the page with Fugleramme's own renderer, at release v0.31.1 (commit
+`3fae1edce3459aae1a8cca81fa793f74418203c8`). Fugleramme itself is maintained
 upstream; this widget is maintained separately.
 
 ## Code
@@ -60,5 +60,5 @@ with Noto faces for scripts they lack. All are under the
 [SIL Open Font License 1.1](https://openfontlicense.org/). Like the plates, they
 are fetched from Fugleramme's repository at the pin on first use, not shipped
 here; Fugleramme's
-[`assets/fonts/ATTRIBUTION.md`](https://github.com/arnegiacomo/fugleramme/blob/03046c764748a74bd6ffddf5ed526ceb0c199436/assets/fonts/ATTRIBUTION.md)
+[`assets/fonts/ATTRIBUTION.md`](https://github.com/arnegiacomo/fugleramme/blob/3fae1edce3459aae1a8cca81fa793f74418203c8/assets/fonts/ATTRIBUTION.md)
 lists each family's upstream, and each family's `OFL.txt` sits beside it there.

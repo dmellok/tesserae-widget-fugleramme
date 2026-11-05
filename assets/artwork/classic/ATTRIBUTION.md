@@ -29,7 +29,9 @@ and the [Internet Archive](https://archive.org/details/birdsEuropeIVGoul), publi
 Sharpe** (1850-1883), from the Commons category
 [The Birds of Asia (John Gould)](https://commons.wikimedia.org/wiki/Category:The_Birds_of_Asia_(John_Gould))
 and the [University of Kansas](https://digital.lib.ku.edu/ku-gould),
-public domain (PD-Art, PD-old-100); and *The Birds of Australia* (1840-1848),
+public domain (PD-Art, PD-old-100); *The Birds of New Guinea* (1875-1888), with
+**William Hart** and **Richard Bowdler Sharpe**, Biodiversity Heritage Library scans on
+Wikimedia Commons, public domain; and *The Birds of Australia* (1840-1848),
 illustrated by **John and Elizabeth Gould** and **Henry Constantine Richter**,
 scans from Smithsonian Libraries via [BHL](https://www.biodiversitylibrary.org/), [University of Kansas](https://digital.lib.ku.edu/ku-gould), and [Project Gutenberg / Internet Archive](https://www.gutenberg.org/ebooks/62524),
 public domain, and rawpixel's scan of the 1972 facsimile edition on
@@ -51,7 +53,7 @@ Manifest key: `dresser`.
 *Onze vogels in huis en tuin* (1869-1876), from the Commons category
 [Onze vogels in huis en tuin](https://commons.wikimedia.org/wiki/Category:Onze_vogels_in_huis_en_tuin)
 and the Internet Archive; the *Proceedings of the Zoological Society of London*
-(1871); *The Ibis* (1870, 1877 and 1891); the *Catalogue of the Birds in the British Museum*, vol. 5 (1881);
+(1871); *The Ibis* (1870, 1877 and 1891); the *Catalogue of the Birds in the British Museum*, vols. 3 (1877) and 5 (1881);
 *Lahore to Yarkand* by **George Henderson** and **Allan O. Hume** (1873); *A Monograph of the Turdidae*
 by **Henry Seebohm**, edited by **R. B. Sharpe** (1898-1902);
 *A monograph of the Capitonidæ, or scansorial barbets* by **C. H. T. Marshall** and
@@ -88,10 +90,11 @@ Public domain (PD-scan / PD-old-70-expired). Manifest key: `greene`.
 
 **Whitaker** - *The Birds of Tunisia* by **Joseph I. S. Whitaker** (1905), plates by **Henrik Grönvold**, Smithsonian Libraries scans from the Commons category [The birds of Tunisia; being a history of the birds found in the regency of Tunis (1905)](https://commons.wikimedia.org/wiki/Category:The_birds_of_Tunisia%3B_being_a_history_of_the_birds_found_in_the_regency_of_Tunis_(1905)) and the Internet Archive. Public domain (Commons: no known copyright restrictions). Manifest key: `whitaker`.
 
-**Audubon** - *Birds of America* by **John James Audubon** (1829-1838), engraved, printed, and colored by **R. Havell**, [Courtesy of the John James Audubon Center at Mill Grove, Montgomery County Audubon Collection, and Zebra Publishing](https://www.audubon.org/art/birds-of-america). Public domain (PD-scan / PD-old-70-expired). Manifest key: `audubon`.
+**Audubon** - *Birds of America* by **John James Audubon** (1829-1838), engraved, printed, and colored by **R. Havell**, [Courtesy of the John James Audubon Center at Mill Grove, Montgomery County Audubon Collection, and Zebra Publishing](https://www.audubon.org/art/birds-of-america), and University of Pittsburgh and Bibliothèque nationale de France scans via Wikimedia Commons. Public domain (PD-scan / PD-old-70-expired). Manifest key: `audubon`.
 Also the octavo edition, *The birds of America, from drawings made in the United
 States and their territories*, with hand-coloured lithographs by **John T. Bowen**:
-Internet Archive scans via Wikimedia Commons (no known copyright restrictions),
+Internet Archive scans, directly and via Wikimedia Commons (no known copyright restrictions),
+New York Public Library scans via Wikimedia Commons (public domain),
 Biodiversity Heritage Library scans via Wikimedia Commons (CC BY 2.0),
 and [Metropolitan Museum of Art](https://www.metmuseum.org/art/collection) scans
 (CC0).
@@ -114,6 +117,13 @@ Parts I and II (U.S. Biological Survey Bulletins 30 and 34, 1907-1910), via the 
 Public domain (US Federal Government work).
 And paintings of his in the U.S. Fish and Wildlife Service's [FWS Library](https://www.fws.gov/library),
 public domain.
+And plates after his paintings in *A Natural History of the Ducks* by **John C. Phillips**
+(1922), Biodiversity Heritage Library scans from the Commons category
+[A Natural History of the Ducks](https://commons.wikimedia.org/wiki/Category:A_Natural_History_of_the_Ducks),
+public domain.
+And colour plates after his paintings in *The Burgess Bird Book for Children* by **Thornton W. Burgess**
+(1919), from the Commons category [The Burgess Bird Book for Children](https://commons.wikimedia.org/wiki/Category:The_Burgess_Bird_Book_for_Children),
+public domain (PD-US).
 
 **Hines** - Wildlife illustrations by **Bob Hines** (Robert W. Hines, 1912-1994) for the **U.S. Fish and Wildlife Service**, from the Commons category [Robert W. Hines](https://commons.wikimedia.org/wiki/Category:Robert_W._Hines). Public domain (US Federal Government work). Manifest key: `hines`.
 
@@ -197,6 +207,8 @@ CC BY 2.0. Manifest key: `jardine`.
 
 **Emory** - *Report on the United States and Mexican boundary survey* (1857-1859), directed by **William H. Emory**, with ornithology by **Spencer Fullerton Baird**. Missouri Botanical Garden Library scan via [Internet Archive / BHL](https://archive.org/details/mobot31753002023650). Public domain. Manifest key: `emory`.
 
+**Baird** - *The Birds of North America* by **Spencer F. Baird**, **John Cassin** and **George N. Lawrence** (Philadelphia: J. B. Lippincott & Co., 1860), atlas of hand-coloured lithographs by **Bowen & Co.**, Smithsonian Libraries scan via the [Internet Archive](https://archive.org/details/birdsofnorthamer1860bair). Public domain (No Copyright - United States). Manifest key: `baird`.
+
 **Reed** - *The Bird Book* by **Chester A. Reed** (Worcester, Mass.: C. K. Reed, 1914). Prelinger Library scan via the [Internet Archive](https://archive.org/details/birdbookillustra00reedrich). Public domain (published in the US before 1929; Reed died 1912). Manifest key: `reed`.
 
 **Wolf** - plates drawn and lithographed by **Joseph Wolf** for the *Proceedings of the Zoological Society of London* (1851, printed by **M. & N. Hanhart**; 1852, printed by **Ford & West**), Natural History Museum Library scan via the [Biodiversity Heritage Library](https://www.biodiversitylibrary.org/item/96443) and the [Internet Archive](https://archive.org/details/proceedingsofgen51zool), and Wikimedia Commons, and Ernst Mayr Library, Museum of Comparative Zoology, Harvard University scan via the [Internet Archive](https://archive.org/details/proceedingsofzoo002zool). Public domain (PD-old-100; Wolf died 1899). Manifest key: `wolf`.
@@ -214,3 +226,15 @@ CC BY 2.0. Manifest key: `jardine`.
 **Palmstruch** - *Svensk botanik* by **Johan Wilhelm Palmstruch** (1802-1843), hand-coloured engravings by **Carl Wilhelm Venus**. New York Botanical Garden scans via the [Internet Archive](https://archive.org/details/svenskbotanik03palm). Public domain. Manifest key: `palmstruch`.
 
 **Michaux** - *The North American Sylva* by **François André Michaux** (1819 English edition), plates after **Pancrace Bessa**. Biodiversity Heritage Library scans via Wikimedia Commons. Public domain (PD-old-100). Manifest key: `michaux`.
+
+**Wilson** - *American Ornithology; or, the Natural History of the Birds of the United States* by **Alexander Wilson** (1808-1814), hand-coloured engravings by **Alexander Lawson** after Wilson's drawings. Oak Spring Garden Library scan of the first edition via the [Internet Archive](https://archive.org/details/Wilson5896-v5), public domain; and [National Gallery of Art](https://www.nga.gov/) open-access scans via Wikimedia Commons (CC0). Manifest key: `wilson`.
+
+**DeKay** - *Zoology of New-York, or the New-York Fauna*, Part 2: Birds, by **James E. DeKay** (Albany, 1844), hand-coloured lithographs by **J. W. Hill**, printed by **Endicott**. New York Public Library scans via Wikimedia Commons. Public domain. Manifest key: `dekay`.
+
+**Catesby** - *The Natural History of Carolina, Florida and the Bahama Islands* by **Mark Catesby** (1754 edition), hand-coloured etchings after his own drawings. Missouri Botanical Garden scans via the Biodiversity Heritage Library on the [Internet Archive](https://archive.org/details/mobot31753000502945); and plates after him, engraved by **Johann Michael Seligmann** for a German edition of his work, with scans from the **Iconographia Zoologica** collection of the **University of Amsterdam** Special Collections (Artis Library), via the Commons category [Iconographia Zoologica](https://commons.wikimedia.org/wiki/Category:Iconographia_Zoologica). Public domain. Manifest key: `catesby`.
+
+**Horsfall** - plates by **Robert Bruce Horsfall** in *The Warblers of North America* by **Frank M. Chapman** (1907), American Museum of Natural History Library scans via the [Biodiversity Heritage Library](https://www.biodiversitylibrary.org/bibliography/8683) on Wikimedia Commons. Public domain. Manifest key: `horsfall`.
+
+**Brehm** - *Monographie der Papageien* (1842-1855), edited by **Christian Ludwig Brehm**, hand-coloured plates. Scans from the **Iconographia Zoologica** collection of the **University of Amsterdam** Special Collections (Artis Library), via the Commons category [Iconographia Zoologica](https://commons.wikimedia.org/wiki/Category:Iconographia_Zoologica); the whole work is on the [Biodiversity Heritage Library](https://www.biodiversitylibrary.org/bibliography/61090). Public domain (PD-Art / PD-old-70-expired). Manifest key: `brehm`.
+
+**Nuttall** - *A Popular Handbook of the Birds of the United States and Canada* by **Thomas Nuttall**, revised and annotated by **Montague Chamberlain** (1903), chromolithographs. American Museum of Natural History Library scan via the [Internet Archive](https://archive.org/details/popularhandbook00nutt). Public domain (published in the US before 1929). Manifest key: `nuttall`.

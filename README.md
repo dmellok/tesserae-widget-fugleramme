@@ -3,7 +3,7 @@
 A [Tesserae](https://github.com/dmellok/tesserae) widget: the birds your BirdNET-Go or a BirdWeather station heard, as hand-coloured 1800s plates packed onto one printed page.
 
 > **This is [Fugleramme](https://github.com/arnegiacomo/fugleramme), by Arne Giacomo Munthe-Kaas, ported to Tesserae with his permission.**
-> The page is drawn by Fugleramme's own renderer, vendored at release v0.29.0, and the plates are Fugleramme's: some 1200 cut-outs of over 650 species from Gould, the von Wright brothers, Audubon and many more, hand-curated, none AI-generated, under CC BY-SA 4.0. If you like the page, go and see the project it comes from: [github.com/arnegiacomo/fugleramme](https://github.com/arnegiacomo/fugleramme), with its [docs](https://arnegiacomo.dev/fugleramme/) and a [live frame](https://fugleramme.arnegiacomo.dev). This widget is maintained separately from Fugleramme, so report problems with it here, not there.
+> The page is drawn by Fugleramme's own renderer, vendored at release v0.31.1, and the plates are Fugleramme's: some 1200 cut-outs of over 650 species from Gould, the von Wright brothers, Audubon and many more, hand-curated, none AI-generated, under CC BY-SA 4.0. If you like the page, go and see the project it comes from: [github.com/arnegiacomo/fugleramme](https://github.com/arnegiacomo/fugleramme), with its [docs](https://arnegiacomo.dev/fugleramme/) and a [live frame](https://fugleramme.arnegiacomo.dev). This widget is maintained separately from Fugleramme, so report problems with it here, not there.
 
 ![The demo garden's collage](screenshots/lg.png)
 
@@ -23,12 +23,21 @@ Each bird wears one of its plates a day, picked from its name and the date, so a
 
 Pick a **Detector**:
 
+- **Fugleramme server**: a running Fugleramme of your own. Type the address it opens at, such as `http://fugleramme.local:8080`, and the cell shows the page that frame draws, exactly as its own admin sets it (page, birds, names, paper, size). Nothing else is set here but **Fit**: **Whole page** shows all of it on Fugleramme's own paper, **Fill the cell** crops what does not fit. For a page the cell's shape, turn on **Lock to panel** in Fugleramme's admin, or pick its **Resolution** and aspect to match.
 - **BirdNET-Go**: type the address its web page opens at, such as `http://birdnet.local:8080`. A password is only needed when its Private Mode keeps the detections behind a login.
 - **BirdWeather station**: a public station's number, or its page such as `https://app.birdweather.com/stations/123`. Up to five, separated by commas, are read as one.
 
-Leave the address or the station empty and the widget shows a **demo garden** (thirty-odd birds of a northern European garden, one of them new today), so every page and layout can be tried first.
+Each choice shows only its own options: with a Fugleramme server, the page, layout and name options below are Fugleramme's admin's to set and are hidden here.
 
-The rest of the options, all as Fugleramme offers them:
+Leave the BirdNET-Go address or the station empty and the widget shows a **demo garden** (thirty-odd birds of a northern European garden, one of them new today), so every page and layout can be tried first.
+
+### With a Fugleramme server
+
+The widget reads two of the routes Fugleramme serves to other screens without a sign-in (its docs: [Screens](https://arnegiacomo.dev/fugleramme/screens/)): `/state`, a token that changes whenever the page would, and `/collage.png`, the page itself. The page is downloaded by your Tesserae only when the token changes, kept in the widget's data folder, and shown from there, so the panel and the editor never have to reach the frame themselves. If the frame is away, the cell keeps the last page it drew; if it has never answered, the cell says so. The admin's sign-in, when it is on, does not cover these two routes, so no password is needed.
+
+Fugleramme draws `/collage.png` on request, and a Pi Zero 2 W packs a large collage slowly, so the widget waits up to a minute for it.
+
+The rest of the options, all as Fugleramme offers them (BirdNET-Go and BirdWeather only):
 
 | Option | Choices |
 | --- | --- |
@@ -57,7 +66,7 @@ Chinese, Japanese, Korean, Thai, Arabic, Hebrew and Malayalam names are set in F
 
 `fetch()` asks the detector what Fugleramme's page would ask it, records the answers, and works out which plates and faces the page needs. The job it records is keyed on Fugleramme's own state key: everything the page is a function of (the birds, the names, the layout, the day, the settings). `client.js` then loads the page as a PNG from the widget's own route, `/plugins/fugleramme/page.png?job=…&w=…&h=…`, at the cell's real pixel size, and waits for it to decode before the panel's screenshot is taken. The route replays the recorded answers into Fugleramme's renderer, which draws exactly the page Fugleramme would at that size, and keeps the PNG. A page is drawn once per job and size: until the birds change, every render is a file read.
 
-The plates (about 220 MB in all) and the faces (about 5 MB) are not in the widget. Each is fetched from Fugleramme's repository at the pinned commit the first time a page needs it, from `raw.githubusercontent.com/arnegiacomo/fugleramme/03046c7…/assets/…`, and kept in the widget's data folder; only the small records ship (which plates exist, where the bird is on each, who made it). Nothing waits for them: the page is drawn straight away with the plates that have arrived, a bird whose plate is still on its way is left off for now, and a face still on its way is stood in for by a serif the machine already has. The download shows as a card in Tesserae's progress tray ("9 of 17 plates"), and while it runs the editor's preview repaints every few seconds as the plates land, so the page fills in; a scheduled send is warmed ahead so the panel gets the whole page. A plate or a face that cannot be fetched is left out the same way and tried again within the hour.
+The plates (about 220 MB in all) and the faces (about 5 MB) are not in the widget. Each is fetched from Fugleramme's repository at the pinned commit the first time a page needs it, from `raw.githubusercontent.com/arnegiacomo/fugleramme/3fae1ed…/assets/…`, and kept in the widget's data folder; only the small records ship (which plates exist, where the bird is on each, who made it). Nothing waits for them: the page is drawn straight away with the plates that have arrived, a bird whose plate is still on its way is left off for now, and a face still on its way is stood in for by a serif the machine already has. The download shows as a card in Tesserae's progress tray ("9 of 17 plates"), and while it runs the editor's preview repaints every few seconds as the plates land, so the page fills in; a scheduled send is warmed ahead so the panel gets the whole page. A plate or a face that cannot be fetched is left out the same way and tried again within the hour.
 
 The widget asks for `network:*` because the BirdNET-Go address is whatever you type. Beyond your detector it only talks to `app.birdweather.com` (for a BirdWeather station) and `raw.githubusercontent.com` (Fugleramme's plates and faces, and BirdNET's label lists).
 

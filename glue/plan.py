@@ -94,6 +94,13 @@ ARTISTS = {
     "palmstruch": "J. W. Palmstruch",
     "werner": "J. C. Werner",
     "gronvold": "Henrik Grønvold",
+    "dekay": "J. E. DeKay",
+    "wilson": "Alexander Wilson",
+    "catesby": "Mark Catesby",
+    "baird": "S. F. Baird",
+    "nuttall": "Thomas Nuttall",
+    "horsfall": "R. B. Horsfall",
+    "brehm": "C. L. Brehm",
 }
 LICENCE = "CC BY-SA 4.0"
 

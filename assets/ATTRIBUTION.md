@@ -1,7 +1,7 @@
 # Attribution and licensing
 
 These files are copied unmodified from
-[Fugleramme](https://github.com/arnegiacomo/fugleramme) at v0.29.0.
+[Fugleramme](https://github.com/arnegiacomo/fugleramme) at v0.31.1.
 
 ## BirdNET scientific-name aliases
 

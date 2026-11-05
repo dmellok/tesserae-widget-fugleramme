@@ -19,7 +19,15 @@ import pytest
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-TESSERAE = Path(__file__).resolve().parents[2] / "tesserae"
+# A Tesserae checkout beside this repository, or beside the widgets/ folder holding it.
+TESSERAE = next(
+    (
+        p / "tesserae"
+        for p in Path(__file__).resolve().parents[2:4]
+        if (p / "tesserae" / "schema").is_dir()
+    ),
+    Path(__file__).resolve().parents[2] / "tesserae",
+)
 
 
 def _load():
@@ -153,7 +161,7 @@ def _fetch_settled(options: dict, ctx: dict) -> dict:
 def test_manifest_is_valid():
     manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
     assert manifest["name"] == "Fugleramme"
-    assert manifest["version"] == "0.1.2"
+    assert manifest["version"] == "0.2.0"
     assert manifest["tesserae_compat"] == "1.x"
     assert len(manifest["description"]) <= 280
     assert manifest["requires"] == ["network:*"]
@@ -656,3 +664,132 @@ def test_a_page_with_no_plate_yet_waits_only_a_moment(tmp_path):
         assert Image.open(io.BytesIO(png)).size == (200, 160)
     finally:
         gate.set()
+
+
+# -- a running Fugleramme as the source ----------------------------------------
+
+remote = server.remote
+
+
+def _png(color=(233, 225, 202), size=(64, 48)) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", size, color).save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+class FakeFrame:
+    """Fugleramme's /state and /collage.png, as remote._get sees them."""
+
+    def __init__(self):
+        self.token, self.body, self.down, self.status = "t1", _png(), False, 200
+        self.pages = 0
+
+    def __call__(self, url, timeout, etag=""):
+        if self.down:
+            raise OSError("connection refused")
+        if url.endswith("/state"):
+            return 200, json.dumps({"token": self.token}).encode(), ""
+        assert url.endswith("/collage.png"), url
+        self.pages += 1
+        return self.status, self.body if self.status == 200 else b"", f'"{self.token}"'
+
+
+@pytest.fixture
+def frame():
+    fake = FakeFrame()
+    with patch.object(remote, "_get", fake):
+        yield fake
+
+
+SERVER = {"source": "server", "server_address": "fugleramme.test:8080"}
+
+
+@pytest.mark.parametrize(
+    ("typed", "base"),
+    [
+        ("fugleramme.local:8080", "http://fugleramme.local:8080"),
+        ("http://pi.local:8080/", "http://pi.local:8080"),
+        ("https://birds.example/collage.png", "https://birds.example"),
+        ("http://pi.local:8080/admin", "http://pi.local:8080"),
+    ],
+)
+def test_server_address_is_read_as_typed(typed, base):
+    assert remote.base_of(typed) == base
+
+
+def test_server_mode_is_the_first_choice_and_hides_the_rest():
+    manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
+    options = manifest["cell_options"]
+    assert options[0]["name"] == "source"
+    assert options[0]["choices"][0]["value"] == remote.SERVER
+    own = {"server_address", "server_fit"}
+    for option in options[1:]:
+        cond = option.get("show_if", {})
+        if option["name"] in own:
+            assert cond == {"source": remote.SERVER}, option["name"]
+        else:
+            # Shown only for a detector, directly or through the option it hangs off.
+            assert cond, option["name"]
+    if (TESSERAE / "app" / "option_conditions.py").exists():
+        sys.path.insert(0, str(TESSERAE))
+        try:
+            from app.option_conditions import option_visible
+        except Exception:
+            return
+        values = {o["name"]: o.get("default") for o in options}
+        for source in ("server", "birdnet_go", "birdweather"):
+            shown = {
+                o["name"]
+                for o in options
+                if option_visible(o, {**values, "source": source}, options)
+            }
+            assert (shown - {"source"} <= own) == (source == remote.SERVER), (source, shown)
+            assert not (shown & own) or source == remote.SERVER, (source, shown)
+
+
+def test_server_page_is_fetched_once_per_token(tmp_path, frame):
+    data = server.fetch(SERVER, {}, ctx=_ctx(tmp_path))
+    assert data["remote"] and remote.valid_key(data["remote_key"])
+    assert (data["page_w"], data["page_h"], data["paper"]) == (64, 48, "#e9e1ca")
+    assert data["fit"] == "contain"
+    assert "CC BY-SA 4.0" in data["credit"]
+    again = server.fetch(SERVER, {}, ctx=_ctx(tmp_path))
+    assert again["remote_key"] == data["remote_key"] and frame.pages == 1
+    frame.token, frame.body = "t2", _png((10, 20, 30))
+    changed = server.fetch({**SERVER, "server_fit": "cover"}, {}, ctx=_ctx(tmp_path))
+    assert changed["remote_key"] != data["remote_key"] and frame.pages == 2
+    assert changed["fit"] == "cover" and changed["paper"] == "#0a141e"
+    # Only the frame's latest page is kept.
+    assert [p.name for p in (tmp_path / "remote").glob("*.png")] == [f"{changed['remote_key']}.png"]
+
+
+def test_server_away_keeps_the_last_page(tmp_path, frame):
+    first = server.fetch(SERVER, {}, ctx=_ctx(tmp_path))
+    frame.down = True
+    held = server.fetch(SERVER, {}, ctx=_ctx(tmp_path))
+    assert "error" not in held and held["remote_key"] == first["remote_key"]
+
+
+def test_server_never_reached_is_said_plainly(tmp_path, frame):
+    frame.down = True
+    data = server.fetch(SERVER, {}, ctx=_ctx(tmp_path))
+    assert data["error"] == "Couldn't reach Fugleramme at http://fugleramme.test:8080."
+    frame.down, frame.status = False, 503
+    data = server.fetch(SERVER, {}, ctx=_ctx(tmp_path))
+    assert data["error"] == "Fugleramme can't reach its detector right now."
+
+
+def test_server_address_missing_is_said_plainly(tmp_path, frame):
+    data = server.fetch({"source": "server"}, {}, ctx=_ctx(tmp_path))
+    assert "Type the address Fugleramme opens at" in data["error"]
+    assert frame.pages == 0
+
+
+def test_server_page_route(tmp_path, client, frame):
+    data = server.fetch(SERVER, {}, ctx=_ctx(tmp_path))
+    got = client.get(f"/plugins/fugleramme/remote.png?key={data['remote_key']}")
+    assert got.status_code == 200 and got.mimetype == "image/png"
+    assert got.data == frame.body
+    assert client.get("/plugins/fugleramme/remote.png?key=../../etc").status_code == 404
+    assert client.get("/plugins/fugleramme/remote.png?key=" + "0" * 20).status_code == 404
+    assert "fugleramme_page.remote" in server.RENDER_SAFE_ENDPOINTS

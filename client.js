@@ -12,6 +12,8 @@ const CSS = `
 :host { display: block; width: 100%; height: 100%; font-family: inherit; }
 .fr { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; color: ${INK}; }
 .pg { display: block; width: 100%; flex: 1 1 auto; min-height: 0; object-fit: fill; }
+.pg.contain { object-fit: contain; }
+.pg.cover { object-fit: cover; }
 .cr { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; padding: 0 0.6em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-style: italic; line-height: 1; }
 .cr span { overflow: hidden; text-overflow: ellipsis; }
 .msg { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 8%; gap: 0.5em; }
@@ -37,8 +39,26 @@ function decoded(img, ms) {
   return Promise.race([ready, wait]);
 }
 
+/* A running Fugleramme's own page (server.py, /plugins/fugleramme/remote.png), kept on the
+   Tesserae server so the panel never has to reach the frame itself. Its admin sets the page's
+   size and shape; the cell shows all of it on the frame's own paper, or fills and crops. */
+async function renderRemote(shadow, d, ctx) {
+  const w = Math.max(16, Math.round((ctx.cell && ctx.cell.w) || 800));
+  const h = Math.max(16, Math.round((ctx.cell && ctx.cell.h) || 480));
+  const strip = Math.max(12, Math.min(22, Math.round(Math.min(w, h) * 0.026)));
+  const url = new URL('./remote.png', import.meta.url);
+  url.searchParams.set('key', d.remote_key);
+  const fit = d.fit === 'cover' ? 'cover' : 'contain';
+  shadow.innerHTML = wrap(d.paper, `<img class="pg ${fit}" alt="" src="${esc(url.href)}">${credit(d, strip)}`);
+  const line = shadow.querySelector('.cr span');
+  if (line && line.scrollWidth > line.clientWidth + 1) line.textContent = d.credit_short || 'Plates from Fugleramme, CC BY-SA 4.0';
+  const img = shadow.querySelector('img');
+  if (img) await decoded(img, 30000);
+}
+
 export default async function render(shadow, ctx) {
   const d = (ctx && ctx.data) || {};
+  if (d.remote && !d.error && d.remote_key) return renderRemote(shadow, d, ctx || {});
   if (d.error || !d.job) {
     const body = d.error || 'Nothing to show yet.';
     shadow.innerHTML = wrap(d.paper, `<div class="msg"><div class="msg-t">Fugleramme</div><div class="msg-b">${esc(body)}</div></div>`);
